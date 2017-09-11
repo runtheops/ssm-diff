@@ -106,3 +106,10 @@ Finally
 $ ssm-diff.py apply
 ```
 will actually do all the necessary modifications of parameters in SSM Parameter Store itself, applying local changes
+
+## Issues and limitations
+Major limitations for now are:
+
+* All new and updated parameters end up having a **String** type. This is as a tradeoff between security and readability of a resulting YAML file. This behavior can be monkey-patched (to, say, `SecureString`) in the [`RemoteState`](states/states.py) class.
+
+* The tool does not support prefix-based export for now, it's either you get and edit a full dump of the parameters or nothing.
