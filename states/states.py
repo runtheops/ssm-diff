@@ -5,7 +5,6 @@ import os
 import yaml
 import boto3
 import dpath
-import json
 import ast
 
 
