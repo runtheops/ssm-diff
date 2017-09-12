@@ -42,32 +42,25 @@ class RemoteState(object):
         self.ssm = boto3.client('ssm')
 
     def get(self, flat=True):
-        ssm = self.ssm
-        resp = ssm.describe_parameters()
-
-        getp = lambda r: ssm.get_parameters(
-            Names=[ p['Name'] for p in r['Parameters'] ],
-            WithDecryption=True
-        )['Parameters']
-
-        params = getp(resp)
-
-        while resp.get('NextToken'):
-            resp = ssm.describe_parameters(
-                NextToken=resp['NextToken']
-            )
-            params.extend(getp(resp))
+        paginator = self.ssm.get_paginator('describe_parameters')
+        ssm_params = {
+            "WithDecryption": True
+        }
 
         r = {}
-        for p in params:
-            try:
-                v = ast.literal_eval(p['Value'])
-            except:
-                v = p['Value']
-            k = p['Name']
-            dpath.util.new(r,k,v)
+
+        for page in paginator.paginate():
+            names = [ p['Name'] for p in page['Parameters'] ]
+            for param in self.ssm.get_parameters(Names=names, **ssm_params)['Parameters']:
+                dpath.util.new(r, param['Name'], self._read_param(param['Value']))
 
         return flatten(r) if flat else r
+
+    def _read_param(self, value):
+        try:
+            return ast.literal_eval(value)
+        except Exception as e:
+            return value
 
     def apply(self, diff):
         ssm = self.ssm
