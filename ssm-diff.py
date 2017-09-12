@@ -9,11 +9,11 @@ def init(filename, paths=['/']):
 
 
 def apply(filename, paths=['/']):
-    r, _, diff = plan(filename)
+    r, _, diff = plan(filename, paths)
 
     print "\nApplying changes..."
     try:
-        r.apply(diff, paths)
+        r.apply(diff)
     except Exception as e:
         print "Failed to apply changes to remote:", e
     print "Done."
