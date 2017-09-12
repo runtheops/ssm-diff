@@ -5,6 +5,8 @@ import os
 import yaml
 import boto3
 import dpath
+import json
+import ast
 
 
 class LocalState(object):
@@ -27,7 +29,7 @@ class LocalState(object):
         try:
             with open(self.filename, 'wb') as f:
                 f.write(yaml.safe_dump(
-                    state, 
+                    state,
                     default_flow_style=False)
                 )
         except Exception as e:
@@ -58,7 +60,11 @@ class RemoteState(object):
 
         r = {}
         for p in params:
-            k, v = p['Name'], p['Value']
+            try:
+                v = ast.literal_eval(p['Value'])
+            except:
+                v = p['Value']
+            k = p['Name']
             dpath.util.new(r,k,v)
 
         return flatten(r) if flat else r
@@ -78,7 +84,7 @@ class RemoteState(object):
 
         for k in diff.changed():
             ssm.put_parameter(
-                Name=k, 
+                Name=k,
                 Value=str(diff.target[k]),
                 Overwrite=True,
                 Type='String'
