@@ -1,5 +1,5 @@
 from __future__ import print_function
-from helpers import flatten
+from helpers import flatten, merge
 import sys
 import os
 import yaml
@@ -12,12 +12,14 @@ class LocalState(object):
     def __init__(self, filename):
         self.filename = filename
 
-    def get(self, flat=True):
+    def get(self, flat=True, paths=['/']):
         try:
+            output = {}
             with open(self.filename,'rb') as f:
                 l = yaml.load(f.read())
-
-            return flatten(l) if flat else l
+            for path in paths:
+                output = merge(output, dpath.util.search(l, path))
+            return flatten(output) if flat else output
         except Exception as e:
             print(e, file=sys.stderr)
             if e.errno == 2:
@@ -40,20 +42,33 @@ class RemoteState(object):
     def __init__(self):
         self.ssm = boto3.client('ssm')
 
-    def get(self, flat=True):
+    def get(self, flat=True, paths=['/']):
         paginator = self.ssm.get_paginator('describe_parameters')
         ssm_params = {
             "WithDecryption": True
         }
+        ssm_describe_params = {
+            'ParameterFilters': [
+                {
+                    'Key': 'Path',
+                    'Option': 'Recursive',
+                    'Values': paths
+                }
+            ]
+        }
 
-        r = {}
+        output = {}
 
-        for page in paginator.paginate():
+        for page in paginator.paginate(**ssm_describe_params):
             names = [ p['Name'] for p in page['Parameters'] ]
             for param in self.ssm.get_parameters(Names=names, **ssm_params)['Parameters']:
-                dpath.util.new(r, param['Name'], self._read_param(param['Value']))
+                dpath.util.new(
+                    obj=output,
+                    path=param['Name'],
+                    value=self._read_param(param['Value'])
+                )
 
-        return flatten(r) if flat else r
+        return flatten(output) if flat else output
 
     def _read_param(self, value):
         try:
