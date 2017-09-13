@@ -33,7 +33,7 @@ def plan(filename, paths):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-f', help='local state yml file', action='store', dest='filename', nargs=1, default='parameters.yml')
+    parser.add_argument('-f', help='local state yml file', action='store', dest='filename', default='parameters.yml')
     parser.add_argument('--path', '-p', action='append', help='filter SSM path')
     subparsers = parser.add_subparsers(help='commands')
 
@@ -48,4 +48,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     paths = args.path if args.path else ['/']
-    args.func(filename=args.filename[0], paths=paths)
+    args.func(filename=args.filename, paths=paths)
