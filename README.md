@@ -15,14 +15,15 @@ Dev:
 
 Then, given that this local YAML representation of the SSM Parameter Store state was edited, `calculating and applying diffs` on the parameters. 
 
+`ssm-diff` supports complex data types as values and can operate within single or multiple prefixes.
+
 ## Geting Started
 Before we start editing the local representation of parameters state, we have to get it from SMM:
 ```
 $ ssm-diff.py init
 ```
 
-will create a local `parameters.yml` file
-that stores a YAML representation of the SSM Parameter Store state.
+will create a local `parameters.yml` file that stores a YAML representation of the SSM Parameter Store state.
 
 Once you accomplish editing this file, adding, modifying or deleting parameters, run:
 ```
@@ -36,6 +37,12 @@ Finally
 $ ssm-diff.py apply
 ```
 will actually apply local changes to the Parameter Store.
+
+Operations can also be limited to a particular prefix(es):
+
+```
+$ ssm-diff.py -p /dev -p /qa/ci {init,plan,apply}
+```
 
 ## Examples
 Let's assume we have the following parameters set in SSM Parameter Store:
@@ -60,13 +67,15 @@ qa:
     api:
       db_schema: foo_ci
       db_user: bar_ci
-      db_password: baz_ci
+      db_password: !secure 'baz_ci'
   uat:
     api:
       db_schema: foo_uat
       db_user: bar_uat
-      db_password: baz_uat
+      db_password: !secure 'baz_uat'
 ```
+
+KMS-encrypted (SecureString) and String type values are distunguished by `!secure` YAML tag.
 
 Let's drop the `ci`-related stuff completely, and edit `uat` parameters a bit, ending up with the following `parameters.yml` file contents:
 ```
@@ -76,7 +85,7 @@ qa:
       db_schema: foo_uat
       db_charset: utf8mb4 
       db_user: bar_changed
-      db_password: baz_changed
+      db_password: !secure 'baz_changed'
 ```
 
 Running
@@ -107,9 +116,5 @@ $ ssm-diff.py apply
 ```
 will actually do all the necessary modifications of parameters in SSM Parameter Store itself, applying local changes
 
-## Issues and limitations
-Major limitations for now are:
-
-* All new and updated parameters end up having a **String** type. This is as a tradeoff between security and readability of a resulting YAML file. This behavior can be monkey-patched (to, say, `SecureString`) in the [`RemoteState`](states/states.py) class.
-
-* The tool does not support prefix-based export for now, it's either you get and edit a full dump of the parameters or nothing.
+## Known issues and limitations
+- There's currently no option to use different KMS keys for `SecureString` values encryption.
