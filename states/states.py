@@ -1,23 +1,62 @@
 from __future__ import print_function
-from helpers import flatten
+from helpers import flatten, merge
 import sys
 import os
 import yaml
 import boto3
 import dpath
+import ast
+
+
+class SecureTag(yaml.YAMLObject):
+    yaml_tag = u'!secure'
+
+    def __init__(self, secure):
+        self.secure = secure
+
+    def __repr__(self):
+        return self.secure
+
+    def __str__(self):
+        return self.secure
+
+    def __eq__(self, other):
+        return self.secure == other.secure if isinstance(other, SecureTag) else False
+
+    def __hash__(self):
+        return hash(self.secure)
+
+    def __ne__(self, other):
+        return (not self.__eq__(other))
+
+    @classmethod
+    def from_yaml(cls, loader, node):
+        return SecureTag(node.value)
+
+    @classmethod
+    def to_yaml(cls, dumper, data):
+        return dumper.represent_scalar(cls.yaml_tag, data.secure)
+
+yaml.SafeLoader.add_constructor('!secure', SecureTag.from_yaml)
+yaml.SafeDumper.add_multi_representer(SecureTag, SecureTag.to_yaml)
 
 
 class LocalState(object):
     def __init__(self, filename):
         self.filename = filename
 
-    def get(self, flat=True):
+    def get(self, paths, flat=True):
         try:
+            output = {}
             with open(self.filename,'rb') as f:
-                l = yaml.load(f.read())
-
-            return flatten(l) if flat else l
-        except Exception as e:
+                l = yaml.safe_load(f.read())
+            for path in paths:
+                if path.strip('/'):
+                    output = merge(output, dpath.util.search(l, path))
+                else:
+                    return flatten(l) if flat else l
+            return flatten(output) if flat else output
+        except ValueError as e:
             print(e, file=sys.stderr)
             if e.errno == 2:
                 print("Please, run init before doing plan!")
@@ -27,7 +66,7 @@ class LocalState(object):
         try:
             with open(self.filename, 'wb') as f:
                 f.write(yaml.safe_dump(
-                    state, 
+                    state,
                     default_flow_style=False)
                 )
         except Exception as e:
@@ -39,47 +78,65 @@ class RemoteState(object):
     def __init__(self):
         self.ssm = boto3.client('ssm')
 
-    def get(self, flat=True):
-        ssm = self.ssm
-        resp = ssm.describe_parameters()
+    def get(self, paths, flat=True):
+        paginator = self.ssm.get_paginator('describe_parameters')
+        ssm_params = {
+            "WithDecryption": True
+        }
+        ssm_describe_params = {
+            'ParameterFilters': [
+                {
+                    'Key': 'Path',
+                    'Option': 'Recursive',
+                    'Values': paths
+                }
+            ]
+        }
 
-        getp = lambda r: ssm.get_parameters(
-            Names=[ p['Name'] for p in r['Parameters'] ],
-            WithDecryption=True
-        )['Parameters']
+        output = {}
 
-        params = getp(resp)
+        for page in paginator.paginate(**ssm_describe_params):
+            names = [ p['Name'] for p in page['Parameters'] ]
+            for param in self.ssm.get_parameters(Names=names, **ssm_params)['Parameters']:
 
-        while resp.get('NextToken'):
-            resp = ssm.describe_parameters(
-                NextToken=resp['NextToken']
-            )
-            params.extend(getp(resp))
+                dpath.util.new(
+                    obj=output,
+                    path=param['Name'],
+                    value=self._read_param(param['Value'], param['Type'])
+                )
 
-        r = {}
-        for p in params:
-            k, v = p['Name'], p['Value']
-            dpath.util.new(r,k,v)
+        return flatten(output) if flat else output
 
-        return flatten(r) if flat else r
+    def _read_param(self, value, ssm_type='String'):
+        try:
+            output = ast.literal_eval(value)
+        except Exception as e:
+            output = value
+        return SecureTag(output) if ssm_type == 'SecureString' else output
 
     def apply(self, diff):
-        ssm = self.ssm
 
         for k in diff.added():
-            ssm.put_parameter(
+            ssm_type = 'String'
+            if isinstance(diff.target[k], list):
+                ssm_type = 'StringList'
+            if isinstance(diff.target[k], SecureTag):
+                ssm_type = 'SecureString'
+            self.ssm.put_parameter(
                 Name=k,
                 Value=str(diff.target[k]),
-                Type='String'
+                Type=ssm_type
             )
 
         for k in diff.removed():
-            ssm.delete_parameter(Name=k)
+            self.ssm.delete_parameter(Name=k)
 
         for k in diff.changed():
-            ssm.put_parameter(
-                Name=k, 
+            ssm_type = 'SecureString' if isinstance(diff.target[k], SecureTag) else 'String'
+
+            self.ssm.put_parameter(
+                Name=k,
                 Value=str(diff.target[k]),
                 Overwrite=True,
-                Type='String'
+                Type=ssm_type
             )
