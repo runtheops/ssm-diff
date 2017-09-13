@@ -44,7 +44,7 @@ class LocalState(object):
     def __init__(self, filename):
         self.filename = filename
 
-    def get(self, flat=True, paths=['/']):
+    def get(self, paths, flat=True):
         try:
             output = {}
             with open(self.filename,'rb') as f:
@@ -77,7 +77,7 @@ class RemoteState(object):
     def __init__(self):
         self.ssm = boto3.client('ssm')
 
-    def get(self, flat=True, paths=['/']):
+    def get(self, paths, flat=True):
         paginator = self.ssm.get_paginator('describe_parameters')
         ssm_params = {
             "WithDecryption": True

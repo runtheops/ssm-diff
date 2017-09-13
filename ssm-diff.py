@@ -3,12 +3,12 @@ from states import *
 import argparse
 
 
-def init(filename, paths=['/']):
+def init(filename, paths):
     r, l = RemoteState(), LocalState(filename)
     l.save(r.get(flat=False, paths=paths))
 
 
-def apply(filename, paths=['/']):
+def apply(filename, paths):
     r, _, diff = plan(filename, paths)
 
     print "\nApplying changes..."
@@ -19,9 +19,9 @@ def apply(filename, paths=['/']):
     print "Done."
 
 
-def plan(filename, paths=['/']):
+def plan(filename, paths):
     r, l = RemoteState(), LocalState(filename)
-    diff = helpers.FlatDictDiffer(r.get(paths=paths),l.get(paths=paths))
+    diff = helpers.FlatDictDiffer(r.get(paths=paths), l.get(paths=paths))
 
     if diff.differ:
         diff.print_state()
@@ -38,16 +38,16 @@ if __name__ == "__main__":
 
     parser_plan = subparsers.add_parser('plan', help='display changes between local and remote states')
     parser_plan.set_defaults(func=plan)
-    parser_plan.add_argument('--paths', nargs='+', default=['/'], help='filter SSM paths')
+    parser_plan.add_argument('--path', '-p', action='append', help='filter SSM path')
 
     parser_init = subparsers.add_parser('init', help='create or overwrite local state snapshot')
     parser_init.set_defaults(func=init)
-    parser_init.add_argument('--paths', nargs='+', default=['/'], help='filter SSM paths')
+    parser_init.add_argument('--path', '-p', action='append', help='filter SSM path')
 
     parser_apply = subparsers.add_parser('apply', help='apply diff to the remote state')
     parser_apply.set_defaults(func=apply)
-    parser_apply.add_argument('--paths', nargs='+', default=['/'], help='filter SSM paths')
+    parser_apply.add_argument('--path', '-p', action='append', help='filter SSM path')
 
     args = parser.parse_args()
-
-    args.func(filename=args.filename, paths=args.paths)
+    paths = args.path if args.path else ['/']
+    args.func(filename=args.filename, paths=paths)
