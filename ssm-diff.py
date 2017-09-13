@@ -34,19 +34,17 @@ def plan(filename, paths):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', help='local state yml file', action='store', dest='filename', nargs=1, default='parameters.yml')
+    parser.add_argument('--path', '-p', action='append', help='filter SSM path')
     subparsers = parser.add_subparsers(help='commands')
 
     parser_plan = subparsers.add_parser('plan', help='display changes between local and remote states')
     parser_plan.set_defaults(func=plan)
-    parser_plan.add_argument('--path', '-p', action='append', help='filter SSM path')
 
     parser_init = subparsers.add_parser('init', help='create or overwrite local state snapshot')
     parser_init.set_defaults(func=init)
-    parser_init.add_argument('--path', '-p', action='append', help='filter SSM path')
 
     parser_apply = subparsers.add_parser('apply', help='apply diff to the remote state')
     parser_apply.set_defaults(func=apply)
-    parser_apply.add_argument('--path', '-p', action='append', help='filter SSM path')
 
     args = parser.parse_args()
     paths = args.path if args.path else ['/']
