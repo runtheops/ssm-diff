@@ -7,6 +7,7 @@ import boto3
 import dpath
 import ast
 
+
 class SecureTag(yaml.YAMLObject):
     yaml_tag = u'!secure'
 
