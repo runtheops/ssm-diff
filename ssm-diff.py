@@ -48,4 +48,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     paths = args.path if args.path else ['/']
-    args.func(filename=args.filename, paths=paths)
+    args.func(filename=args.filename[0], paths=paths)
