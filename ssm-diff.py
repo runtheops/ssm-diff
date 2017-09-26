@@ -49,6 +49,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     paths = args.path if args.path else ['/']
-    if args.profile != "default":
+    if args.profile != "default" and args.filename == 'parameters.yml':
         args.filename = args.profile + ".yml"
     args.func(filename=args.filename, paths=paths, profile=args.profile)
