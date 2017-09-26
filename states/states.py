@@ -75,7 +75,8 @@ class LocalState(object):
 
 
 class RemoteState(object):
-    def __init__(self):
+    def __init__(self, profile):
+        boto3.setup_default_session(profile_name=profile)
         self.ssm = boto3.client('ssm')
 
     def get(self, paths, flat=True):
@@ -97,13 +98,14 @@ class RemoteState(object):
 
         for page in paginator.paginate(**ssm_describe_params):
             names = [ p['Name'] for p in page['Parameters'] ]
-            for param in self.ssm.get_parameters(Names=names, **ssm_params)['Parameters']:
+            if names:
+                for param in self.ssm.get_parameters(Names=names, **ssm_params)['Parameters']:
 
-                dpath.util.new(
-                    obj=output,
-                    path=param['Name'],
-                    value=self._read_param(param['Value'], param['Type'])
-                )
+                    dpath.util.new(
+                        obj=output,
+                        path=param['Name'],
+                        value=self._read_param(param['Value'], param['Type'])
+                    )
 
         return flatten(output) if flat else output
 

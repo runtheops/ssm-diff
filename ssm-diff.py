@@ -3,13 +3,13 @@ from states import *
 import argparse
 
 
-def init(filename, paths):
-    r, l = RemoteState(), LocalState(filename)
+def init(filename, paths, profile):
+    r, l = RemoteState(profile), LocalState(filename)
     l.save(r.get(flat=False, paths=paths))
 
 
-def apply(filename, paths):
-    r, _, diff = plan(filename, paths)
+def apply(filename, paths, profile):
+    r, _, diff = plan(filename, paths, profile)
 
     print "\nApplying changes..."
     try:
@@ -19,8 +19,8 @@ def apply(filename, paths):
     print "Done."
 
 
-def plan(filename, paths):
-    r, l = RemoteState(), LocalState(filename)
+def plan(filename, paths, profile):
+    r, l = RemoteState(profile), LocalState(filename)
     diff = helpers.FlatDictDiffer(r.get(paths=paths), l.get(paths=paths))
 
     if diff.differ:
@@ -35,6 +35,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', help='local state yml file', action='store', dest='filename', default='parameters.yml')
     parser.add_argument('--path', '-p', action='append', help='filter SSM path')
+    parser.add_argument('--profile', help='AWS profile name', action='store', dest='profile', default='default')
     subparsers = parser.add_subparsers(help='commands')
 
     parser_plan = subparsers.add_parser('plan', help='display changes between local and remote states')
@@ -48,4 +49,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     paths = args.path if args.path else ['/']
-    args.func(filename=args.filename, paths=paths)
+    if args.profile != "default":
+        args.filename = args.profile + ".yml"
+    args.func(filename=args.filename, paths=paths, profile=args.profile)
