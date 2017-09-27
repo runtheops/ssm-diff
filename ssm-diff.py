@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from states import *
 import argparse
+import os
 
 
 def init(filename, paths, profile):
@@ -49,6 +50,11 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     paths = args.path if args.path else ['/']
-    if args.profile != "default" and args.filename == 'parameters.yml':
-        args.filename = args.profile + ".yml"
+
+    if args.filename == 'parameters.yml':
+        if args.profile == 'default':
+            if 'AWS_PROFILE' in os.environ:
+                args.filename = os.environ['AWS_PROFILE'] + '.yml'
+        else:
+            args.filename = args.profile + '.yml'
     args.func(filename=args.filename, paths=paths, profile=args.profile)

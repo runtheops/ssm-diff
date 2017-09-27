@@ -56,7 +56,7 @@ class LocalState(object):
                 else:
                     return flatten(l) if flat else l
             return flatten(output) if flat else output
-        except ValueError as e:
+        except Exception as e:
             print(e, file=sys.stderr)
             if e.errno == 2:
                 print("Please, run init before doing plan!")
