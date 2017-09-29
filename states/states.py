@@ -7,6 +7,13 @@ import boto3
 import dpath
 import ast
 
+def multiline_representer(dumper, data):
+    if len(data.splitlines()) > 1:
+        return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|')
+    return dumper.represent_scalar('tag:yaml.org,2002:str', data)
+
+yaml.SafeDumper.add_representer(unicode, multiline_representer)
+yaml.Dumper.add_representer(unicode, multiline_representer)
 
 class SecureTag(yaml.YAMLObject):
     yaml_tag = u'!secure'
@@ -35,6 +42,8 @@ class SecureTag(yaml.YAMLObject):
 
     @classmethod
     def to_yaml(cls, dumper, data):
+        if len(data.secure.splitlines()) > 1:
+            return dumper.represent_scalar(cls.yaml_tag, data.secure, style='|')
         return dumper.represent_scalar(cls.yaml_tag, data.secure)
 
 yaml.SafeLoader.add_constructor('!secure', SecureTag.from_yaml)
