@@ -7,13 +7,6 @@ import boto3
 import dpath
 import ast
 
-def multiline_representer(dumper, data):
-    if len(data.splitlines()) > 1:
-        return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|')
-    return dumper.represent_scalar('tag:yaml.org,2002:str', data)
-
-yaml.SafeDumper.add_representer(unicode, multiline_representer)
-yaml.Dumper.add_representer(unicode, multiline_representer)
 
 class SecureTag(yaml.YAMLObject):
     yaml_tag = u'!secure'
@@ -42,8 +35,6 @@ class SecureTag(yaml.YAMLObject):
 
     @classmethod
     def to_yaml(cls, dumper, data):
-        if len(data.secure.splitlines()) > 1:
-            return dumper.represent_scalar(cls.yaml_tag, data.secure, style='|')
         return dumper.represent_scalar(cls.yaml_tag, data.secure)
 
 yaml.SafeLoader.add_constructor('!secure', SecureTag.from_yaml)
@@ -65,7 +56,7 @@ class LocalState(object):
                 else:
                     return flatten(l) if flat else l
             return flatten(output) if flat else output
-        except Exception as e:
+        except ValueError as e:
             print(e, file=sys.stderr)
             if e.errno == 2:
                 print("Please, run init before doing plan!")
@@ -84,8 +75,7 @@ class LocalState(object):
 
 
 class RemoteState(object):
-    def __init__(self, profile):
-        boto3.setup_default_session(profile_name=profile)
+    def __init__(self):
         self.ssm = boto3.client('ssm')
 
     def get(self, paths, flat=True):
@@ -107,14 +97,13 @@ class RemoteState(object):
 
         for page in paginator.paginate(**ssm_describe_params):
             names = [ p['Name'] for p in page['Parameters'] ]
-            if names:
-                for param in self.ssm.get_parameters(Names=names, **ssm_params)['Parameters']:
+            for param in self.ssm.get_parameters(Names=names, **ssm_params)['Parameters']:
 
-                    dpath.util.new(
-                        obj=output,
-                        path=param['Name'],
-                        value=self._read_param(param['Value'], param['Type'])
-                    )
+                dpath.util.new(
+                    obj=output,
+                    path=param['Name'],
+                    value=self._read_param(param['Value'], param['Type'])
+                )
 
         return flatten(output) if flat else output
 
