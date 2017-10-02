@@ -36,7 +36,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', help='local state yml file', action='store', dest='filename', default='parameters.yml')
     parser.add_argument('--path', '-p', action='append', help='filter SSM path')
-    parser.add_argument('--profile', help='AWS profile name', action='store', dest='profile', default='default')
+    parser.add_argument('--profile', help='AWS profile name', action='store', dest='profile')
     subparsers = parser.add_subparsers(help='commands')
 
     parser_plan = subparsers.add_parser('plan', help='display changes between local and remote states')
@@ -52,7 +52,7 @@ if __name__ == "__main__":
     paths = args.path if args.path else ['/']
 
     if args.filename == 'parameters.yml':
-        if args.profile == 'default':
+        if not args.profile:
             if 'AWS_PROFILE' in os.environ:
                 args.filename = os.environ['AWS_PROFILE'] + '.yml'
         else:

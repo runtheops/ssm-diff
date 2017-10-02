@@ -85,7 +85,8 @@ class LocalState(object):
 
 class RemoteState(object):
     def __init__(self, profile):
-        boto3.setup_default_session(profile_name=profile)
+        if profile:
+            boto3.setup_default_session(profile_name=profile)
         self.ssm = boto3.client('ssm')
 
     def get(self, paths, flat=True):
