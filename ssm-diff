@@ -4,13 +4,28 @@ import argparse
 import os
 
 
-def init(filename, paths, profile):
-    r, l = RemoteState(profile), LocalState(filename)
-    l.save(r.get(flat=False, paths=paths))
+def init(args):
+    r, l = RemoteState(args.profile), LocalState(args.filename)
+    l.save(r.get(flat=False, paths=args.path))
 
 
-def apply(filename, paths, profile):
-    r, _, diff = plan(filename, paths, profile)
+def pull(args):
+    dictfilter = lambda x, y: dict([ (i,x[i]) for i in x if i in set(y) ])
+    r, l = RemoteState(args.profile), LocalState(args.filename)
+    diff = helpers.FlatDictDiffer(r.get(paths=args.path), l.get(paths=args.path))
+    if args.force:
+        ref_set = diff.changed().union(diff.removed()).union(diff.unchanged())
+        target_set = diff.added()
+    else:
+        ref_set = diff.unchanged().union(diff.removed())
+        target_set = diff.added().union(diff.changed())
+    state = dictfilter(diff.ref, ref_set)
+    state.update(dictfilter(diff.target, target_set))
+    l.save(state)
+
+
+def apply(args):
+    r, _, diff = plan(args)
 
     print "\nApplying changes..."
     try:
@@ -20,9 +35,9 @@ def apply(filename, paths, profile):
     print "Done."
 
 
-def plan(filename, paths, profile):
-    r, l = RemoteState(profile), LocalState(filename)
-    diff = helpers.FlatDictDiffer(r.get(paths=paths), l.get(paths=paths))
+def plan(args):
+    r, l = RemoteState(args.profile), LocalState(args.filename)
+    diff = helpers.FlatDictDiffer(r.get(paths=args.path), l.get(paths=args.path))
 
     if diff.differ:
         diff.print_state()
@@ -45,11 +60,15 @@ if __name__ == "__main__":
     parser_init = subparsers.add_parser('init', help='create or overwrite local state snapshot')
     parser_init.set_defaults(func=init)
 
+    parser_pull = subparsers.add_parser('pull', help='pull updates from remote state')
+    parser_pull.set_defaults(func=pull)
+    parser_pull.add_argument('--force', help='Overwrite local changes', action='store_true', dest='force')
+
     parser_apply = subparsers.add_parser('apply', help='apply diff to the remote state')
     parser_apply.set_defaults(func=apply)
 
     args = parser.parse_args()
-    paths = args.path if args.path else ['/']
+    args.path = args.path if args.path else ['/']
 
     if args.filename == 'parameters.yml':
         if not args.profile:
@@ -57,4 +76,4 @@ if __name__ == "__main__":
                 args.filename = os.environ['AWS_PROFILE'] + '.yml'
         else:
             args.filename = args.profile + '.yml'
-    args.func(filename=args.filename, paths=paths, profile=args.profile)
+    args.func(args)
