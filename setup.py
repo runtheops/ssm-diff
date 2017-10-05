@@ -3,7 +3,7 @@ from setuptools import setup
 setup(
     description = 'A tool to manage contents of AWS SSM Parameter Store',
     name = 'ssm-diff',
-    version = '0.2',
+    version = '0.3',
     author = 'Sergey Motovilovets',
     author_email = 'motovilovets.sergey@gmail.com',
     license='MIT',
