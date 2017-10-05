@@ -1,6 +1,7 @@
 from termcolor import colored
 from copy import deepcopy
 import collections
+import dpath
 
 
 class FlatDictDiffer(object):
@@ -46,6 +47,17 @@ def flatten(d, pkey='', sep='/'):
         else:
             items.append((sep + new, v))
     return dict(items)
+
+
+def unflatten(d):
+    output = {}
+    for k, v in d.items():
+        dpath.util.new(
+            obj=output,
+            path=k,
+            value=v
+        )
+    return output
 
 
 def merge(a, b):
