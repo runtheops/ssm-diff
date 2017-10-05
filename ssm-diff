@@ -62,7 +62,7 @@ if __name__ == "__main__":
 
     parser_pull = subparsers.add_parser('pull', help='pull updates from remote state')
     parser_pull.set_defaults(func=pull)
-    parser_pull.add_argument('--force', help='Overwrite local changes', action='store_true', dest='force')
+    parser_pull.add_argument('--force', help='overwrite local changes', action='store_true', dest='force')
 
     parser_apply = subparsers.add_parser('apply', help='apply diff to the remote state')
     parser_apply.set_defaults(func=apply)
