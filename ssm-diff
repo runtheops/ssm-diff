@@ -21,7 +21,7 @@ def pull(args):
         target_set = diff.added().union(diff.changed())
     state = dictfilter(diff.ref, ref_set)
     state.update(dictfilter(diff.target, target_set))
-    l.save(state)
+    l.save(helpers.unflatten(state))
 
 
 def apply(args):
