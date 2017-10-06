@@ -17,31 +17,36 @@ Then, given that this local YAML representation of the SSM Parameter Store state
 
 `ssm-diff` supports complex data types as values and can operate within single or multiple prefixes.
 
+## Installation
+```
+pip install ssm-diff
+```
+
 ## Geting Started
 Before we start editing the local representation of parameters state, we have to get it from SMM:
 ```
-$ ssm-diff.py init
+$ ssm-diff init
 ```
 
 will create a local `parameters.yml` file that stores a YAML representation of the SSM Parameter Store state.
 
 Once you accomplish editing this file, adding, modifying or deleting parameters, run:
 ```
-$ ssm-diff.py plan
+$ ssm-diff plan
 ```
 
 Which will show you the diff between this local representation and an SSM Parameter Store.
 
 Finally
 ```
-$ ssm-diff.py apply
+$ ssm-diff apply
 ```
 will actually apply local changes to the Parameter Store.
 
 Operations can also be limited to a particular prefix(es):
 
 ```
-$ ssm-diff.py -p /dev -p /qa/ci {init,plan,apply}
+$ ssm-diff -p /dev -p /qa/ci {init,plan,apply}
 ```
 
 ## Examples
@@ -57,7 +62,7 @@ Let's assume we have the following parameters set in SSM Parameter Store:
 ```
 
 ```
-$ ssm-diff.py init
+$ ssm-diff init
 ```
 will create a `parameters.yml` file with the following content:
 
@@ -90,7 +95,7 @@ qa:
 
 Running
 ```
-$ ssm-diff.py plan
+$ ssm-diff plan
 ```
 will give the following output:
 
@@ -112,7 +117,7 @@ will give the following output:
 
 Finally
 ```
-$ ssm-diff.py apply
+$ ssm-diff apply
 ```
 will actually do all the necessary modifications of parameters in SSM Parameter Store itself, applying local changes
 
