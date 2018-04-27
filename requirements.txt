@@ -1,4 +1,3 @@
 termcolor>=1.1.0
-boto3>=1.4.7
-dpath==1.4.0
+boto3>=1.7.10
 PyYAML>=3.12

@@ -1,7 +1,6 @@
 from termcolor import colored
 from copy import deepcopy
 import collections
-import dpath
 
 
 class FlatDictDiffer(object):
@@ -40,19 +39,42 @@ class FlatDictDiffer(object):
 
 def flatten(d, pkey='', sep='/'):
     items = []
-    for k, v in d.items():
+    for k in d:
         new = pkey + sep + k if pkey else k
-        if isinstance(v, collections.MutableMapping):
-            items.extend(flatten(v, new, sep=sep).items())
+        if isinstance(d[k], collections.MutableMapping):
+            items.extend(flatten(d[k], new, sep=sep).items())
         else:
-            items.append((sep + new, v))
+            items.append((sep + new, d[k]))
     return dict(items)
+
+
+def add(obj, path, value):
+    parts = path.strip("/").split("/")
+    last = len(parts) - 1
+    for index, part in enumerate(parts):
+        if index == last:
+            obj[part] = value
+        else:
+            obj = obj.setdefault(part, {})
+
+
+def search(state, path):
+    result = state
+    for p in path.strip("/").split("/"):
+        if result.get(p):
+            result = result[p]
+        else:
+            result = {}
+            break
+    output = {}
+    add(output, path, result)
+    return output
 
 
 def unflatten(d):
     output = {}
-    for k, v in d.items():
-        dpath.util.new(
+    for k, v in d:
+        add(
             obj=output,
             path=k,
             value=v
@@ -64,9 +86,9 @@ def merge(a, b):
     if not isinstance(b, dict):
         return b
     result = deepcopy(a)
-    for k, v in b.iteritems():
+    for k in b:
         if k in result and isinstance(result[k], dict):
-            result[k] = merge(result[k], v)
+            result[k] = merge(result[k], b[k])
         else:
-            result[k] = deepcopy(v)
+            result[k] = deepcopy(b[k])
     return result

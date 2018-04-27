@@ -1,11 +1,9 @@
 from __future__ import print_function
-from helpers import flatten, merge
+from helpers import flatten, merge, add, search
 import sys
 import os
 import yaml
 import boto3
-import dpath
-import ast
 
 def multiline_representer(dumper, data):
     if len(data.splitlines()) > 1:
@@ -61,7 +59,7 @@ class LocalState(object):
                 l = yaml.safe_load(f.read())
             for path in paths:
                 if path.strip('/'):
-                    output = merge(output, dpath.util.search(l, path))
+                    output = merge(output, search(l, path))
                 else:
                     return flatten(l) if flat else l
             return flatten(output) if flat else output
@@ -110,8 +108,7 @@ class RemoteState(object):
             names = [ p['Name'] for p in page['Parameters'] ]
             if names:
                 for param in self.ssm.get_parameters(Names=names, **ssm_params)['Parameters']:
-
-                    dpath.util.new(
+                    add(
                         obj=output,
                         path=param['Name'],
                         value=self._read_param(param['Value'], param['Type'])
@@ -120,11 +117,7 @@ class RemoteState(object):
         return flatten(output) if flat else output
 
     def _read_param(self, value, ssm_type='String'):
-        try:
-            output = ast.literal_eval(value)
-        except Exception as e:
-            output = value
-        return SecureTag(output) if ssm_type == 'SecureString' else output
+        return SecureTag(value) if ssm_type == 'SecureString' else value
 
     def apply(self, diff):
 
