@@ -87,27 +87,15 @@ class RemoteState(object):
             boto3.setup_default_session(profile_name=profile)
         self.ssm = boto3.client('ssm')
 
-    def get(self, paths, flat=True):
-        paginator = self.ssm.get_paginator('describe_parameters')
-        ssm_params = {
-            "WithDecryption": True
-        }
-        ssm_describe_params = {
-            'ParameterFilters': [
-                {
-                    'Key': 'Path',
-                    'Option': 'Recursive',
-                    'Values': paths
-                }
-            ]
-        }
-
+    def get(self, paths=['/'], flat=True):
+        paginator = self.ssm.get_paginator('get_parameters_by_path')
         output = {}
-
-        for page in paginator.paginate(**ssm_describe_params):
-            names = [ p['Name'] for p in page['Parameters'] ]
-            if names:
-                for param in self.ssm.get_parameters(Names=names, **ssm_params)['Parameters']:
+        for path in paths:
+            for page in paginator.paginate(
+                Path=path,
+                Recursive=True,
+                WithDecryption=True):
+                for param in page['Parameters']:
                     add(
                         obj=output,
                         path=param['Name'],
