@@ -6,13 +6,17 @@ import yaml
 import boto3
 import termcolor
 
-def multiline_representer(dumper, data):
+def str_presenter(dumper, data):
+    if len(data.splitlines()) == 1 and data[-1] == '\n':
+        return dumper.represent_scalar(
+            'tag:yaml.org,2002:str', data, style='>')
     if len(data.splitlines()) > 1:
-        return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|')
-    return dumper.represent_scalar('tag:yaml.org,2002:str', data)
+        return dumper.represent_scalar(
+            'tag:yaml.org,2002:str', data, style='|')
+    return dumper.represent_scalar(
+        'tag:yaml.org,2002:str', data.strip())
 
-yaml.SafeDumper.add_representer(unicode, multiline_representer)
-yaml.Dumper.add_representer(unicode, multiline_representer)
+yaml.SafeDumper.add_representer(str, str_presenter)
 
 class SecureTag(yaml.YAMLObject):
     yaml_tag = u'!secure'
@@ -116,7 +120,7 @@ class RemoteState(object):
                 ssm_type = 'SecureString'
             self.ssm.put_parameter(
                 Name=k,
-                Value=repr(diff.target[k]),
+                Value=repr(diff.target[k]).decode('string_escape').strip("\'"),
                 Type=ssm_type)
 
         for k in diff.removed():
@@ -127,6 +131,6 @@ class RemoteState(object):
 
             self.ssm.put_parameter(
                 Name=k,
-                Value=repr(diff.target[k]),
+                Value=repr(diff.target[k]).decode('string_escape').strip("\'"),
                 Overwrite=True,
                 Type=ssm_type)
