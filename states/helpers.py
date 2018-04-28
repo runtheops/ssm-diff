@@ -21,20 +21,20 @@ class FlatDictDiffer(object):
         return self.ref_set - self.isect
 
     def changed(self):
-        return set(k for k in self.isect if self.ref[k] != self.target[k])
+        return set(k for k in self.isect if str(self.ref[k]) != str(self.target[k]))
 
     def unchanged(self):
-        return set(k for k in self.isect if self.ref[k] == self.target[k])
+        return set(k for k in self.isect if str(self.ref[k]) == str(self.target[k]))
 
     def print_state(self):
         for k in self.added():
-            print colored("+", 'green'), "{} = {}".format(k, self.target[k])
+            print colored("+", 'green'), "{} = {}".format(k, str(self.target[k]))
 
         for k in self.removed():
             print colored("-", 'red'), k
 
         for k in self.changed():
-            print colored("~", 'yellow'), "{}:\n\t< {}\n\t> {}".format(k, self.ref[k], self.target[k])
+            print colored("~", 'yellow'), "{}:\n\t< {}\n\t> {}".format(k, str(self.ref[k]), str(self.target[k]))
 
 
 def flatten(d, pkey='', sep='/'):
@@ -77,8 +77,7 @@ def unflatten(d):
         add(
             obj=output,
             path=k,
-            value=v
-        )
+            value=v)
     return output
 
 

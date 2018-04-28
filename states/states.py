@@ -4,6 +4,7 @@ import sys
 import os
 import yaml
 import boto3
+import termcolor
 
 def multiline_representer(dumper, data):
     if len(data.splitlines()) > 1:
@@ -23,7 +24,7 @@ class SecureTag(yaml.YAMLObject):
         return self.secure
 
     def __str__(self):
-        return self.secure
+        return termcolor.colored(self.secure, 'magenta')
 
     def __eq__(self, other):
         return self.secure == other.secure if isinstance(other, SecureTag) else False
@@ -74,8 +75,7 @@ class LocalState(object):
             with open(self.filename, 'wb') as f:
                 f.write(yaml.safe_dump(
                     state,
-                    default_flow_style=False)
-                )
+                    default_flow_style=False))
         except Exception as e:
             print(e, file=sys.stderr)
             sys.exit(1)
@@ -99,13 +99,12 @@ class RemoteState(object):
                     add(
                         obj=output,
                         path=param['Name'],
-                        value=self._read_param(param['Value'], param['Type'])
-                    )
+                        value=self._read_param(param['Value'], param['Type']))
 
         return flatten(output) if flat else output
 
     def _read_param(self, value, ssm_type='String'):
-        return SecureTag(value) if ssm_type == 'SecureString' else value
+        return SecureTag(value) if ssm_type == 'SecureString' else str(value)
 
     def apply(self, diff):
 
@@ -117,9 +116,8 @@ class RemoteState(object):
                 ssm_type = 'SecureString'
             self.ssm.put_parameter(
                 Name=k,
-                Value=str(diff.target[k]),
-                Type=ssm_type
-            )
+                Value=repr(diff.target[k]),
+                Type=ssm_type)
 
         for k in diff.removed():
             self.ssm.delete_parameter(Name=k)
@@ -129,7 +127,6 @@ class RemoteState(object):
 
             self.ssm.put_parameter(
                 Name=k,
-                Value=str(diff.target[k]),
+                Value=repr(diff.target[k]),
                 Overwrite=True,
-                Type=ssm_type
-            )
+                Type=ssm_type)
