@@ -1,19 +1,22 @@
 from __future__ import print_function
-from helpers import flatten, merge
+from helpers import flatten, merge, add, search
 import sys
 import os
 import yaml
 import boto3
-import dpath
-import ast
+import termcolor
 
-def multiline_representer(dumper, data):
+def str_presenter(dumper, data):
+    if len(data.splitlines()) == 1 and data[-1] == '\n':
+        return dumper.represent_scalar(
+            'tag:yaml.org,2002:str', data, style='>')
     if len(data.splitlines()) > 1:
-        return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|')
-    return dumper.represent_scalar('tag:yaml.org,2002:str', data)
+        return dumper.represent_scalar(
+            'tag:yaml.org,2002:str', data, style='|')
+    return dumper.represent_scalar(
+        'tag:yaml.org,2002:str', data.strip())
 
-yaml.SafeDumper.add_representer(unicode, multiline_representer)
-yaml.Dumper.add_representer(unicode, multiline_representer)
+yaml.SafeDumper.add_representer(str, str_presenter)
 
 class SecureTag(yaml.YAMLObject):
     yaml_tag = u'!secure'
@@ -25,7 +28,7 @@ class SecureTag(yaml.YAMLObject):
         return self.secure
 
     def __str__(self):
-        return self.secure
+        return termcolor.colored(self.secure, 'magenta')
 
     def __eq__(self, other):
         return self.secure == other.secure if isinstance(other, SecureTag) else False
@@ -61,7 +64,7 @@ class LocalState(object):
                 l = yaml.safe_load(f.read())
             for path in paths:
                 if path.strip('/'):
-                    output = merge(output, dpath.util.search(l, path))
+                    output = merge(output, search(l, path))
                 else:
                     return flatten(l) if flat else l
             return flatten(output) if flat else output
@@ -76,8 +79,7 @@ class LocalState(object):
             with open(self.filename, 'wb') as f:
                 f.write(yaml.safe_dump(
                     state,
-                    default_flow_style=False)
-                )
+                    default_flow_style=False))
         except Exception as e:
             print(e, file=sys.stderr)
             sys.exit(1)
@@ -89,42 +91,24 @@ class RemoteState(object):
             boto3.setup_default_session(profile_name=profile)
         self.ssm = boto3.client('ssm')
 
-    def get(self, paths, flat=True):
-        paginator = self.ssm.get_paginator('describe_parameters')
-        ssm_params = {
-            "WithDecryption": True
-        }
-        ssm_describe_params = {
-            'ParameterFilters': [
-                {
-                    'Key': 'Path',
-                    'Option': 'Recursive',
-                    'Values': paths
-                }
-            ]
-        }
-
+    def get(self, paths=['/'], flat=True):
+        paginator = self.ssm.get_paginator('get_parameters_by_path')
         output = {}
-
-        for page in paginator.paginate(**ssm_describe_params):
-            names = [ p['Name'] for p in page['Parameters'] ]
-            if names:
-                for param in self.ssm.get_parameters(Names=names, **ssm_params)['Parameters']:
-
-                    dpath.util.new(
+        for path in paths:
+            for page in paginator.paginate(
+                Path=path,
+                Recursive=True,
+                WithDecryption=True):
+                for param in page['Parameters']:
+                    add(
                         obj=output,
                         path=param['Name'],
-                        value=self._read_param(param['Value'], param['Type'])
-                    )
+                        value=self._read_param(param['Value'], param['Type']))
 
         return flatten(output) if flat else output
 
     def _read_param(self, value, ssm_type='String'):
-        try:
-            output = ast.literal_eval(value)
-        except Exception as e:
-            output = value
-        return SecureTag(output) if ssm_type == 'SecureString' else output
+        return SecureTag(value) if ssm_type == 'SecureString' else str(value)
 
     def apply(self, diff):
 
@@ -136,9 +120,8 @@ class RemoteState(object):
                 ssm_type = 'SecureString'
             self.ssm.put_parameter(
                 Name=k,
-                Value=str(diff.target[k]),
-                Type=ssm_type
-            )
+                Value=repr(diff.target[k]) if type(diff.target[k]) == SecureTag else str(diff.target[k]),
+                Type=ssm_type)
 
         for k in diff.removed():
             self.ssm.delete_parameter(Name=k)
@@ -148,7 +131,6 @@ class RemoteState(object):
 
             self.ssm.put_parameter(
                 Name=k,
-                Value=str(diff.target[k]),
+                Value=repr(diff.target[k]) if type(diff.target[k]) == SecureTag else str(diff.target[k]),
                 Overwrite=True,
-                Type=ssm_type
-            )
+                Type=ssm_type)
