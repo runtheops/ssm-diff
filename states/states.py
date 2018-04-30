@@ -120,7 +120,7 @@ class RemoteState(object):
                 ssm_type = 'SecureString'
             self.ssm.put_parameter(
                 Name=k,
-                Value=repr(diff.target[k]).decode('string_escape').strip("\'"),
+                Value=repr(diff.target[k]) if type(diff.target[k]) == SecureTag else str(diff.target[k]),
                 Type=ssm_type)
 
         for k in diff.removed():
@@ -131,6 +131,6 @@ class RemoteState(object):
 
             self.ssm.put_parameter(
                 Name=k,
-                Value=repr(diff.target[k]).decode('string_escape').strip("\'"),
+                Value=repr(diff.target[k]) if type(diff.target[k]) == SecureTag else str(diff.target[k]),
                 Overwrite=True,
                 Type=ssm_type)
