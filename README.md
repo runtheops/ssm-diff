@@ -23,12 +23,16 @@ pip install ssm-diff
 ```
 
 ## Geting Started
+The tool relies on native AWS SDK, thus, on a way SDK [figures out](http://boto3.readthedocs.io/en/latest/guide/configuration.html) an effective AWS configuration. You might want to configure it explicitly, setting `AWS_DEFAULT_REGION`, or `AWS_PROFILE`, before doing and manipulations on parameters
+
+When `AWS_PROFILE` environment variable is set, local state file will have a name corresponding to the profile name.
+
 Before we start editing the local representation of parameters state, we have to get it from SMM:
 ```
 $ ssm-diff init
 ```
 
-will create a local `parameters.yml` file that stores a YAML representation of the SSM Parameter Store state.
+will create a local `parameters.yml` (or `<AWS_PROFILE>.yml` if `AWS_PROFILE` is in use) file that stores a YAML representation of the SSM Parameter Store state.
 
 Once you accomplish editing this file, adding, modifying or deleting parameters, run:
 ```
@@ -48,6 +52,13 @@ Operations can also be limited to a particular prefix(es):
 ```
 $ ssm-diff -p /dev -p /qa/ci {init,plan,apply}
 ```
+
+NOTE: when remote state diverges for some reason, but you still want to preserve remote changes, there's a:
+
+```
+$ ssm-diff pull
+```
+command, doing just that.
 
 ## Examples
 Let's assume we have the following parameters set in SSM Parameter Store:
