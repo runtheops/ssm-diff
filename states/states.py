@@ -68,11 +68,15 @@ class LocalState(object):
                 else:
                     return flatten(l) if flat else l
             return flatten(output) if flat else output
-        except Exception as e:
+        except IOError as e:
             print(e, file=sys.stderr)
             if e.errno == 2:
                 print("Please, run init before doing plan!")
             sys.exit(1)
+        except TypeError as e:
+            if 'object is not iterable' in e.args[0]:
+                return dict()
+            raise
 
     def save(self, state):
         try:
