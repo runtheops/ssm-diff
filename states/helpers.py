@@ -73,11 +73,11 @@ def search(state, path):
 
 def unflatten(d):
     output = {}
-    for k, v in d:
+    for k in d:
         add(
             obj=output,
             path=k,
-            value=v)
+            value=d[k])
     return output
 
 
