@@ -1,4 +1,12 @@
+#!/usr/bin/env python
+
+from os import path
 from setuptools import setup
+
+
+wd = path.abspath(path.dirname(__file__))
+with open(path.join(wd, 'README.md'), encoding='utf-8') as f:
+    long_description = f.read()
 
 setup(
     description = 'A tool to manage contents of AWS SSM Parameter Store',
@@ -9,8 +17,8 @@ setup(
     license='MIT',
     url = 'https://github.com/runtheops/ssm-diff',
     download_url = 'https://github.com/runtheops/ssm-diff/archive/0.2.tar.gz',
-    setup_requires=['setuptools-markdown'],
-    long_description_markdown_filename='README.md',
+    long_description=long_description,
+    long_description_content_type='text/markdown',
     keywords = ['aws', 'ssm', 'parameter-store'],
     packages = ['states'],
     scripts=['ssm-diff'],
