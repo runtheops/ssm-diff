@@ -28,13 +28,13 @@ class FlatDictDiffer(object):
 
     def print_state(self):
         for k in self.added():
-            print colored("+", 'green'), "{} = {}".format(k, self.target[k])
+            print(colored("+", 'green'), "{} = {}".format(k, self.target[k]))
 
         for k in self.removed():
-            print colored("-", 'red'), k
+            print(colored("-", 'red'), k)
 
         for k in self.changed():
-            print colored("~", 'yellow'), "{}:\n\t< {}\n\t> {}".format(k, self.ref[k], self.target[k])
+            print(colored("~", 'yellow'), "{}:\n\t< {}\n\t> {}".format(k, self.ref[k], self.target[k]))
 
 
 def flatten(d, pkey='', sep='/'):

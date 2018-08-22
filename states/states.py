@@ -1,5 +1,6 @@
 from __future__ import print_function
-from helpers import flatten, merge, add, search
+from botocore.exceptions import ClientError, NoCredentialsError
+from .helpers import flatten, merge, add, search
 import sys
 import os
 import yaml
@@ -81,9 +82,8 @@ class LocalState(object):
     def save(self, state):
         try:
             with open(self.filename, 'wb') as f:
-                f.write(yaml.safe_dump(
-                    state,
-                    default_flow_style=False))
+                content = yaml.safe_dump(state, default_flow_style=False)
+                f.write(bytes(content.encode('utf-8')))
         except Exception as e:
             print(e, file=sys.stderr)
             sys.exit(1)
@@ -96,18 +96,20 @@ class RemoteState(object):
         self.ssm = boto3.client('ssm')
 
     def get(self, paths=['/'], flat=True):
-        paginator = self.ssm.get_paginator('get_parameters_by_path')
+        p = self.ssm.get_paginator('get_parameters_by_path')
         output = {}
         for path in paths:
-            for page in paginator.paginate(
-                Path=path,
-                Recursive=True,
-                WithDecryption=True):
-                for param in page['Parameters']:
-                    add(
-                        obj=output,
-                        path=param['Name'],
-                        value=self._read_param(param['Value'], param['Type']))
+            try:
+                for page in p.paginate(
+                    Path=path,
+                    Recursive=True,
+                    WithDecryption=True):
+                    for param in page['Parameters']:
+                        add(obj=output,
+                            path=param['Name'],
+                            value=self._read_param(param['Value'], param['Type']))
+            except (ClientError, NoCredentialsError) as e:
+                print("Failed to fetch parameters from SSM!", e, file=sys.stderr)
 
         return flatten(output) if flat else output
 

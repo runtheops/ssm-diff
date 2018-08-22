@@ -1,5 +1,7 @@
 #!/usr/bin/env python
+from __future__ import print_function
 from states import *
+import states.helpers as helpers
 import argparse
 import os
 
@@ -27,12 +29,12 @@ def pull(args):
 def apply(args):
     r, _, diff = plan(args)
 
-    print "\nApplying changes..."
+    print("\nApplying changes...")
     try:
         r.apply(diff)
     except Exception as e:
-        print "Failed to apply changes to remote:", e
-    print "Done."
+        print("Failed to apply changes to remote:", e)
+    print("Done.")
 
 
 def plan(args):
@@ -42,7 +44,7 @@ def plan(args):
     if diff.differ:
         diff.print_state()
     else:
-        print "Remote state it up to date."
+        print("Remote state it up to date.")
 
     return r, l, diff
 
@@ -52,7 +54,8 @@ if __name__ == "__main__":
     parser.add_argument('-f', help='local state yml file', action='store', dest='filename', default='parameters.yml')
     parser.add_argument('--path', '-p', action='append', help='filter SSM path')
     parser.add_argument('--profile', help='AWS profile name', action='store', dest='profile')
-    subparsers = parser.add_subparsers(help='commands')
+    subparsers = parser.add_subparsers(dest='func', help='commands')
+    subparsers.required = True
 
     parser_plan = subparsers.add_parser('plan', help='display changes between local and remote states')
     parser_plan.set_defaults(func=plan)
