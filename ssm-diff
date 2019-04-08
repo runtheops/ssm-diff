@@ -44,7 +44,7 @@ def plan(args):
     if diff.differ:
         diff.print_state()
     else:
-        print("Remote state it up to date.")
+        print("Remote state is up to date.")
 
     return r, l, diff
 
