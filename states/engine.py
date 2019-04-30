@@ -28,7 +28,7 @@ class DiffBase(metaclass=DiffMount):
     @classmethod
     def get_plugin(cls, name):
         if name in cls.plugins:
-            return cls.plugins[name]()
+            return cls.plugins[name]
 
     @classmethod
     def configure(cls, args):
@@ -102,7 +102,10 @@ class DiffResolver(DiffBase):
 
     @classmethod
     def configure(cls, args):
-        return partial(cls, force=args.diffresolver_force)
+        kwargs = {}
+        if hasattr(args, 'force'):
+            kwargs['force'] = args.force
+        return partial(cls, **kwargs)
 
     def added(self):
         """Returns a (flattened) dict of added leaves i.e. {"full/path": value, ...}"""
