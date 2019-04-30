@@ -4,14 +4,13 @@ from __future__ import print_function
 import argparse
 import os
 
-from states import states
-from states.helpers import DiffResolver
+from states import *
 
 
 def configure_endpoints(args):
-    # pre-configure resolver, but still accept remote and local at runtime
-    diff_resolver = DiffResolver.configure(force=args.force)
-    return states.ParameterStore(args.profile, diff_resolver, paths=args.path), states.YAMLFile(args.filename, paths=args.path)
+    # configure() returns a DiffBase class (whose constructor may be wrapped in `partial` to pre-configure it)
+    diff_class = DiffBase.get_plugin(args.engine).configure(args)
+    return storage.ParameterStore(args.profile, diff_class, paths=args.path), storage.YAMLFile(args.filename, paths=args.path)
 
 
 def init(args):
@@ -43,17 +42,16 @@ def plan(args):
     diff = remote.dry_run(local.get())
 
     if diff.differ:
-        print(diff.describe_diff())
+        print(DiffBase.describe_diff(diff.plan))
     else:
         print("Remote state is up to date.")
-
-    return remote, local, diff
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', help='local state yml file', action='store', dest='filename', default='parameters.yml')
     parser.add_argument('--path', '-p', action='append', help='filter SSM path')
+    parser.add_argument('--engine', '-e', help='diff engine to use when interacting with SSM', action='store', dest='engine', default='DiffResolver')
     parser.add_argument('--profile', help='AWS profile name', action='store', dest='profile')
     subparsers = parser.add_subparsers(dest='func', help='commands')
     subparsers.required = True

@@ -136,30 +136,34 @@ class ParameterStore(object):
         return diff.merge()
 
     def dry_run(self, local):
-        return self.diff_class(self.clone(), local)
+        return self.diff_class(self.clone(), local).plan
 
     def push(self, local):
-        diff = self.dry_run(local)
+        plan = self.dry_run(local)
 
-        # diff.added|removed|changed return a "flattened" dict i.e. {"full/path": "value", ...}
-        for k in diff.added():
+        # plan
+        for k, v in plan['add'].items():
+            # { key: new_value }
             ssm_type = 'String'
-            if isinstance(diff.local[k], list):
+            if isinstance(v, list):
                 ssm_type = 'StringList'
-            if isinstance(diff.local[k], SecureTag):
+            if isinstance(v, SecureTag):
                 ssm_type = 'SecureString'
             self.ssm.put_parameter(
                 Name=k,
-                Value=repr(diff.local[k]) if type(diff.local[k]) == SecureTag else str(diff.local[k]),
+                Value=repr(v) if type(v) == SecureTag else str(v),
                 Type=ssm_type)
 
-        for k in diff.removed():
+        for k in plan['delete']:
+            # { key: old_value }
             self.ssm.delete_parameter(Name=k)
 
-        for k in diff.changed():
-            ssm_type = 'SecureString' if isinstance(diff.local[k], SecureTag) else 'String'
+        for k, delta in plan['change']:
+            # { key: {'old': value, 'new': value} }
+            v = delta['new']
+            ssm_type = 'SecureString' if isinstance(v, SecureTag) else 'String'
             self.ssm.put_parameter(
                 Name=k,
-                Value=repr(diff.local[k]) if type(diff.local[k]) == SecureTag else str(diff.local[k]),
+                Value=repr(v) if type(v) == SecureTag else str(v),
                 Overwrite=True,
                 Type=ssm_type)
