@@ -2,15 +2,27 @@
 from __future__ import print_function
 
 import argparse
+import logging
 import os
+import sys
 
 from states import *
+
+root = logging.getLogger()
+root.setLevel(logging.INFO)
+
+handler = logging.StreamHandler(sys.stdout)
+handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(name)s - %(message)s')
+handler.setFormatter(formatter)
+root.addHandler(handler)
 
 
 def configure_endpoints(args):
     # configure() returns a DiffBase class (whose constructor may be wrapped in `partial` to pre-configure it)
     diff_class = DiffBase.get_plugin(args.engine).configure(args)
-    return storage.ParameterStore(args.profile, diff_class, paths=args.path), storage.YAMLFile(args.filename, paths=args.path)
+    return storage.ParameterStore(args.profile, diff_class, paths=args.paths, no_secure=args.no_secure), \
+           storage.YAMLFile(args.filename, paths=args.paths, no_secure=args.no_secure, root_path=args.yaml_root)
 
 
 def init(args):
@@ -39,18 +51,12 @@ def apply(args):
 def plan(args):
     """Print a representation of the changes that would be applied to SSM Parameter Store if applied (per config in args)"""
     remote, local = configure_endpoints(args)
-    diff = remote.dry_run(local.get())
-
-    if diff.differ:
-        print(DiffBase.describe_diff(diff.plan))
-    else:
-        print("Remote state is up to date.")
+    print(DiffBase.describe_diff(remote.dry_run(local.get())))
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-f', help='local state yml file', action='store', dest='filename', default='parameters.yml')
-    parser.add_argument('--path', '-p', action='append', help='filter SSM path')
+    parser.add_argument('-f', help='local state yml file', action='store', dest='filename')
     parser.add_argument('--engine', '-e', help='diff engine to use when interacting with SSM', action='store', dest='engine', default='DiffResolver')
     parser.add_argument('--profile', help='AWS profile name', action='store', dest='profile')
     subparsers = parser.add_subparsers(dest='func', help='commands')
@@ -70,12 +76,29 @@ if __name__ == "__main__":
     parser_apply.set_defaults(func=apply)
 
     args = parser.parse_args()
-    args.path = args.path if args.path else ['/']
 
-    if args.filename == 'parameters.yml':
-        if not args.profile:
-            if 'AWS_PROFILE' in os.environ:
-                args.filename = os.environ['AWS_PROFILE'] + '.yml'
-        else:
-            args.filename = args.profile + '.yml'
+    args.no_secure = os.environ.get('SSM_NO_SECURE', 'false').lower() in ['true', '1']
+    args.yaml_root = os.environ.get('SSM_YAML_ROOT', '/')
+    args.paths = os.environ.get('SSM_PATHS', None)
+    if args.paths is not None:
+        args.paths = args.paths.split(';:')
+    else:
+        # this defaults to '/'
+        args.paths = args.yaml_root
+
+    # root filename
+    if args.filename is not None:
+        filename = args.filename
+    elif args.profile:
+        filename = args.profile
+    elif 'AWS_PROFILE' in os.environ:
+        filename = os.environ['AWS_PROFILE']
+    else:
+        filename = 'parameters'
+
+    # remove extension (will be restored by storage classes)
+    if filename[-4:] == '.yml':
+        filename = filename[:-4]
+    args.filename = filename
+
     args.func(args)

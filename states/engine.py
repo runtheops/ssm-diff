@@ -1,5 +1,6 @@
 import collections
 import logging
+import re
 from functools import partial
 
 from termcolor import colored
@@ -38,24 +39,24 @@ class DiffBase(metaclass=DiffMount):
     @classmethod
     def _flatten(cls, d, current_path='', sep='/'):
         """Convert a nested dict structure into a "flattened" dict i.e. {"full/path": "value", ...}"""
-        items = []
-        for k in d:
+        items = {}
+        for k, v in d.items():
             new = current_path + sep + k if current_path else k
-            if isinstance(d[k], collections.MutableMapping):
-                items.extend(cls._flatten(d[k], new, sep=sep).items())
+            if isinstance(v, collections.MutableMapping):
+                items.update(cls._flatten(v, new, sep=sep).items())
             else:
-                items.append((sep + new, d[k]))
-        return dict(items)
+                items[sep + new] = v
+        return items
 
     @classmethod
     def _unflatten(cls, d, sep='/'):
         """Converts a "flattened" dict i.e. {"full/path": "value", ...} into a nested dict structure"""
         output = {}
-        for k in d:
+        for k, v in d.items():
             add(
                 obj=output,
                 path=k,
-                value=d[k],
+                value=v,
                 sep=sep,
             )
         return output
@@ -66,15 +67,18 @@ class DiffBase(metaclass=DiffMount):
         description = ""
         for k, v in plan['add'].items():
             # { key: new_value }
-            description += colored("+", 'green'), "{} = {}".format(k, v) + '\n'
+            description += colored("+", 'green') + "{} = {}".format(k, v) + '\n'
 
         for k in plan['delete']:
             # { key: old_value }
-            description += colored("-", 'red'), k + '\n'
+            description += colored("-", 'red') + k + '\n'
 
         for k, v in plan['change'].items():
             # { key: {'old': value, 'new': value} }
-            description += colored("~", 'yellow'), "{}:\n\t< {}\n\t> {}".format(k, v['old'], v['new']) + '\n'
+            description += colored("~", 'yellow') + "{}:\n\t< {}\n\t> {}".format(k, v['old'], v['new']) + '\n'
+
+        if description == "":
+            description = "No Changes Detected"
 
         return description
 
