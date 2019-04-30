@@ -1,52 +1,53 @@
 #!/usr/bin/env python
 from __future__ import print_function
-from states import *
-import states.helpers as helpers
+
 import argparse
 import os
 
+from states import states
+from states.helpers import DiffResolver
+
+
+def configure_endpoints(args):
+    # pre-configure resolver, but still accept remote and local at runtime
+    diff_resolver = DiffResolver.configure(force=args.force)
+    return states.ParameterStore(args.profile, diff_resolver, paths=args.path), states.YAMLFile(args.filename, paths=args.path)
+
 
 def init(args):
-    r, l = RemoteState(args.profile), LocalState(args.filename)
-    l.save(r.get(flat=False, paths=args.path))
+    """Create a local YAML file from the SSM Parameter Store (per configs in args)"""
+    remote, local = configure_endpoints(args)
+    local.save(remote.clone())
 
 
 def pull(args):
-    dictfilter = lambda x, y: dict([ (i,x[i]) for i in x if i in set(y) ])
-    r, l = RemoteState(args.profile), LocalState(args.filename)
-    diff = helpers.FlatDictDiffer(r.get(paths=args.path), l.get(paths=args.path))
-    if args.force:
-        ref_set = diff.changed().union(diff.removed()).union(diff.unchanged())
-        target_set = diff.added()
-    else:
-        ref_set = diff.unchanged().union(diff.removed())
-        target_set = diff.added().union(diff.changed())
-    state = dictfilter(diff.ref, ref_set)
-    state.update(dictfilter(diff.target, target_set))
-    l.save(helpers.unflatten(state))
+    """Update local YAML file with changes in the SSM Parameter Store (per configs in args)"""
+    remote, local = configure_endpoints(args)
+    local.save(remote.pull(local.get()))
 
 
 def apply(args):
-    r, _, diff = plan(args)
-
+    """Apply local changes to the SSM Parameter Store"""
+    remote, local = configure_endpoints(args)
     print("\nApplying changes...")
     try:
-        r.apply(diff)
+        remote.push(local.get())
     except Exception as e:
         print("Failed to apply changes to remote:", e)
     print("Done.")
 
 
 def plan(args):
-    r, l = RemoteState(args.profile), LocalState(args.filename)
-    diff = helpers.FlatDictDiffer(r.get(paths=args.path), l.get(paths=args.path))
+    """Print a representation of the changes that would be applied to SSM Parameter Store if applied (per config in args)"""
+    remote, local = configure_endpoints(args)
+    diff = remote.dry_run(local.get())
 
     if diff.differ:
-        diff.print_state()
+        print(diff.describe_diff())
     else:
         print("Remote state is up to date.")
 
-    return r, l, diff
+    return remote, local, diff
 
 
 if __name__ == "__main__":
