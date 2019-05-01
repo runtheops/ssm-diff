@@ -1,11 +1,14 @@
 from __future__ import print_function
-from botocore.exceptions import ClientError, NoCredentialsError
-from .helpers import flatten, merge, add, search
+
 import sys
-import os
-import yaml
+
 import boto3
 import termcolor
+import yaml
+from botocore.exceptions import ClientError, NoCredentialsError
+
+from .helpers import merge, add, search
+
 
 def str_presenter(dumper, data):
     if len(data.splitlines()) == 1 and data[-1] == '\n':
@@ -17,7 +20,9 @@ def str_presenter(dumper, data):
     return dumper.represent_scalar(
         'tag:yaml.org,2002:str', data.strip())
 
+
 yaml.SafeDumper.add_representer(str, str_presenter)
+
 
 class SecureTag(yaml.YAMLObject):
     yaml_tag = u'!secure'
@@ -38,7 +43,7 @@ class SecureTag(yaml.YAMLObject):
         return hash(self.secure)
 
     def __ne__(self, other):
-        return (not self.__eq__(other))
+        return not self.__eq__(other)
 
     @classmethod
     def from_yaml(cls, loader, node):
@@ -50,25 +55,28 @@ class SecureTag(yaml.YAMLObject):
             return dumper.represent_scalar(cls.yaml_tag, data.secure, style='|')
         return dumper.represent_scalar(cls.yaml_tag, data.secure)
 
+
 yaml.SafeLoader.add_constructor('!secure', SecureTag.from_yaml)
 yaml.SafeDumper.add_multi_representer(SecureTag, SecureTag.to_yaml)
 
 
-class LocalState(object):
-    def __init__(self, filename):
+class YAMLFile(object):
+    """Encodes/decodes a dictionary to/from a YAML file"""
+    def __init__(self, filename, paths=('/',)):
         self.filename = filename
+        self.paths = paths
 
-    def get(self, paths, flat=True):
+    def get(self):
         try:
             output = {}
-            with open(self.filename,'rb') as f:
-                l = yaml.safe_load(f.read())
-            for path in paths:
+            with open(self.filename, 'rb') as f:
+                local = yaml.safe_load(f.read())
+            for path in self.paths:
                 if path.strip('/'):
-                    output = merge(output, search(l, path))
+                    output = merge(output, search(local, path))
                 else:
-                    return flatten(l) if flat else l
-            return flatten(output) if flat else output
+                    return local
+            return output
         except IOError as e:
             print(e, file=sys.stderr)
             if e.errno == 2:
@@ -89,21 +97,24 @@ class LocalState(object):
             sys.exit(1)
 
 
-class RemoteState(object):
-    def __init__(self, profile):
+class ParameterStore(object):
+    """Encodes/decodes a dict to/from the SSM Parameter Store"""
+    def __init__(self, profile, diff_class, paths=('/',)):
         if profile:
             boto3.setup_default_session(profile_name=profile)
         self.ssm = boto3.client('ssm')
+        self.diff_class = diff_class
+        self.paths = paths
 
-    def get(self, paths=['/'], flat=True):
+    def clone(self):
         p = self.ssm.get_paginator('get_parameters_by_path')
         output = {}
-        for path in paths:
+        for path in self.paths:
             try:
                 for page in p.paginate(
-                    Path=path,
-                    Recursive=True,
-                    WithDecryption=True):
+                        Path=path,
+                        Recursive=True,
+                        WithDecryption=True):
                     for param in page['Parameters']:
                         add(obj=output,
                             path=param['Name'],
@@ -111,32 +122,48 @@ class RemoteState(object):
             except (ClientError, NoCredentialsError) as e:
                 print("Failed to fetch parameters from SSM!", e, file=sys.stderr)
 
-        return flatten(output) if flat else output
+        return output
 
+    # noinspection PyMethodMayBeStatic
     def _read_param(self, value, ssm_type='String'):
         return SecureTag(value) if ssm_type == 'SecureString' else str(value)
 
-    def apply(self, diff):
+    def pull(self, local):
+        diff = self.diff_class(
+            remote=self.clone(),
+            local=local,
+        )
+        return diff.merge()
 
-        for k in diff.added():
+    def dry_run(self, local):
+        return self.diff_class(self.clone(), local).plan
+
+    def push(self, local):
+        plan = self.dry_run(local)
+
+        # plan
+        for k, v in plan['add'].items():
+            # { key: new_value }
             ssm_type = 'String'
-            if isinstance(diff.target[k], list):
+            if isinstance(v, list):
                 ssm_type = 'StringList'
-            if isinstance(diff.target[k], SecureTag):
+            if isinstance(v, SecureTag):
                 ssm_type = 'SecureString'
             self.ssm.put_parameter(
                 Name=k,
-                Value=repr(diff.target[k]) if type(diff.target[k]) == SecureTag else str(diff.target[k]),
+                Value=repr(v) if type(v) == SecureTag else str(v),
                 Type=ssm_type)
 
-        for k in diff.removed():
+        for k in plan['delete']:
+            # { key: old_value }
             self.ssm.delete_parameter(Name=k)
 
-        for k in diff.changed():
-            ssm_type = 'SecureString' if isinstance(diff.target[k], SecureTag) else 'String'
-
+        for k, delta in plan['change']:
+            # { key: {'old': value, 'new': value} }
+            v = delta['new']
+            ssm_type = 'SecureString' if isinstance(v, SecureTag) else 'String'
             self.ssm.put_parameter(
                 Name=k,
-                Value=repr(diff.target[k]) if type(diff.target[k]) == SecureTag else str(diff.target[k]),
+                Value=repr(v) if type(v) == SecureTag else str(v),
                 Overwrite=True,
                 Type=ssm_type)
