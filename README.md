@@ -16,9 +16,11 @@ Dev:
       app2: <value>
 ```
 
-While `ssm-diff` downloads the entire Parameter Store by default, CLI flags (contructor kwargs for programmatic users) 
+While `ssm-diff` downloads the entire Parameter Store by default, CLI flags (constructor kwargs for programmatic users) 
 make it possible to extract and work with specific branches, exclude encrypted (i.e. secret) keys, and/or download 
-the encrypted version of secrets (e.g. for backup purposes). 
+the encrypted version of secrets (e.g. for backup purposes).
+
+See [`ssm_utils`](https://github.com/dkolb/ssm_utils) for a similar project implemented as a gem.
 
 ## WARNING:  MAKE A BACKUP AND ALWAYS `plan`
 While this package allows you to apply operations to specific Parameter Store paths, this ability is innately dangerous.
