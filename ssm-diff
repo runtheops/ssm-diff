@@ -1,82 +1,117 @@
 #!/usr/bin/env python
 from __future__ import print_function
-from states import *
-import states.helpers as helpers
+
 import argparse
+import logging
 import os
+import sys
+
+from states import *
+
+root = logging.getLogger()
+root.setLevel(logging.INFO)
+
+handler = logging.StreamHandler(sys.stdout)
+handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(name)s - %(message)s')
+handler.setFormatter(formatter)
+root.addHandler(handler)
+
+
+def configure_endpoints(args):
+    # configure() returns a DiffBase class (whose constructor may be wrapped in `partial` to pre-configure it)
+    diff_class = DiffBase.get_plugin(args.engine).configure(args)
+    return storage.ParameterStore(args.profile, diff_class, paths=args.paths, no_secure=args.no_secure,
+                                  no_decrypt=args.no_decrypt), \
+           storage.YAMLFile(args.filename, root_path=args.yaml_root, paths=args.paths, no_secure=args.no_secure,
+                            no_decrypt=args.no_decrypt)
 
 
 def init(args):
-    r, l = RemoteState(args.profile), LocalState(args.filename)
-    l.save(r.get(flat=False, paths=args.path))
+    """Create a local YAML file from the SSM Parameter Store (per configs in args)"""
+    remote, local = configure_endpoints(args)
+    if local.exists():
+        raise ValueError('File already exists, use `pull` instead')
+    local.save(remote.clone())
 
 
 def pull(args):
-    dictfilter = lambda x, y: dict([ (i,x[i]) for i in x if i in set(y) ])
-    r, l = RemoteState(args.profile), LocalState(args.filename)
-    diff = helpers.FlatDictDiffer(r.get(paths=args.path), l.get(paths=args.path))
-    if args.force:
-        ref_set = diff.changed().union(diff.removed()).union(diff.unchanged())
-        target_set = diff.added()
-    else:
-        ref_set = diff.unchanged().union(diff.removed())
-        target_set = diff.added().union(diff.changed())
-    state = dictfilter(diff.ref, ref_set)
-    state.update(dictfilter(diff.target, target_set))
-    l.save(helpers.unflatten(state))
+    """Update local YAML file with changes in the SSM Parameter Store (per configs in args)"""
+    remote, local = configure_endpoints(args)
+    if not local.exists():
+        raise ValueError('File does not exist, use `init` instead')
+    local.save(remote.pull(local.get()))
 
 
-def apply(args):
-    r, _, diff = plan(args)
-
+def push(args):
+    """Apply local changes to the SSM Parameter Store"""
+    remote, local = configure_endpoints(args)
+    if not local.exists():
+        raise ValueError('File does not exist.  Adjust the target file using `-f` or get started using `init`.')
     print("\nApplying changes...")
     try:
-        r.apply(diff)
+        remote.push(local.get())
     except Exception as e:
         print("Failed to apply changes to remote:", e)
     print("Done.")
 
 
 def plan(args):
-    r, l = RemoteState(args.profile), LocalState(args.filename)
-    diff = helpers.FlatDictDiffer(r.get(paths=args.path), l.get(paths=args.path))
-
-    if diff.differ:
-        diff.print_state()
-    else:
-        print("Remote state is up to date.")
-
-    return r, l, diff
+    """Print a representation of the changes that would be applied to SSM Parameter Store if applied (per config in args)"""
+    remote, local = configure_endpoints(args)
+    if not local.exists():
+        raise ValueError('File does not exist.  Adjust the target file using `-f` or get started using `init`.')
+    print(DiffBase.describe_diff(remote.dry_run(local.get())))
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-f', help='local state yml file', action='store', dest='filename', default='parameters.yml')
-    parser.add_argument('--path', '-p', action='append', help='filter SSM path')
+    parser.add_argument('-f', help='local state yml file', action='store', dest='filename')
+    parser.add_argument('--engine', '-e', help='diff engine to use when interacting with SSM', action='store', dest='engine', default='DiffResolver')
     parser.add_argument('--profile', help='AWS profile name', action='store', dest='profile')
     subparsers = parser.add_subparsers(dest='func', help='commands')
     subparsers.required = True
 
-    parser_plan = subparsers.add_parser('plan', help='display changes between local and remote states')
-    parser_plan.set_defaults(func=plan)
-
-    parser_init = subparsers.add_parser('init', help='create or overwrite local state snapshot')
+    parser_init= subparsers.add_parser('clone', help='create a local copy of the remote storage')
     parser_init.set_defaults(func=init)
 
-    parser_pull = subparsers.add_parser('pull', help='pull updates from remote state')
+    parser_pull = subparsers.add_parser('pull', help='pull changes from remote state')
     parser_pull.set_defaults(func=pull)
     parser_pull.add_argument('--force', help='overwrite local changes', action='store_true', dest='force')
 
-    parser_apply = subparsers.add_parser('apply', help='apply diff to the remote state')
-    parser_apply.set_defaults(func=apply)
+    parser_plan = subparsers.add_parser('plan', help='display changes between local and remote states')
+    parser_plan.set_defaults(func=plan)
+
+    parser_apply = subparsers.add_parser('push', help='push changes to the remote storage')
+    parser_apply.set_defaults(func=push)
 
     args = parser.parse_args()
-    args.path = args.path if args.path else ['/']
 
-    if args.filename == 'parameters.yml':
-        if not args.profile:
-            if 'AWS_PROFILE' in os.environ:
-                args.filename = os.environ['AWS_PROFILE'] + '.yml'
-        else:
-            args.filename = args.profile + '.yml'
+    args.no_secure = os.environ.get('SSM_NO_SECURE', 'false').lower() in ['true', '1']
+    args.no_decrypt = os.environ.get('SSM_NO_DECRYPT', 'false').lower() in ['true', '1']
+    args.yaml_root = os.environ.get('SSM_YAML_ROOT', '/')
+    args.paths = os.environ.get('SSM_PATHS', None)
+    if args.paths is not None:
+        args.paths = args.paths.split(';:')
+    else:
+        # this defaults to '/'
+        args.paths = args.yaml_root
+
+    # root filename
+    if args.filename is not None:
+        filename = args.filename
+    elif args.yaml_root != '/':
+        filename = args.yaml_root.replace('/', '~')
+    elif args.profile:
+        filename = args.profile
+    elif 'AWS_PROFILE' in os.environ:
+        filename = os.environ['AWS_PROFILE']
+    else:
+        filename = 'parameters'
+
+    # remove extension (will be restored by storage classes)
+    if filename[-4:] == '.yml':
+        filename = filename[:-4]
+    args.filename = filename
+
     args.func(args)
