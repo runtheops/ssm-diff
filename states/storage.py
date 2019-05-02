@@ -59,29 +59,66 @@ class SecureTag(yaml.YAMLObject):
         return dumper.represent_scalar(cls.yaml_tag, data.secure)
 
 
+class SecureString(yaml.YAMLObject):
+    yaml_tag = u'!SecureString'
+
+
+class Secret(yaml.YAMLObject):
+    yaml_tag = u'!Secret'
+    METADATA_ENCRYPTED = 'encrypted'
+
+    def __init__(self, secret, metadata=None, encrypted=False):
+        super().__init__()
+        self.secret = secret
+        self.metadata = {} if metadata is None else metadata
+        self.metadata[self.METADATA_ENCRYPTED] = encrypted
+
+    def __repr__(self):
+        return "{}(secret={!r}, metadata={!r})".format(self.__class__.__name__, self.secret, self.metadata)
+
+    def __eq__(self, other):
+        if isinstance(other, Secret):
+            return self.secret == other.secret and self.metadata == other.metadata
+        if isinstance(other, SecureTag):
+            return self.secret == other.secure
+        return False
+
+
 yaml.SafeLoader.add_constructor('!secure', SecureTag.from_yaml)
-yaml.SafeDumper.add_multi_representer(SecureTag, SecureTag.to_yaml)
+yaml.SafeLoader.add_constructor('!SecureString', SecureTag.from_yaml)
+# yaml.SafeDumper.add_multi_representer(SecureTag, SecureTag.to_yaml)
+yaml.SafeLoader.add_constructor('!Secret', Secret.from_yaml)
+yaml.SafeDumper.add_multi_representer(Secret, Secret.to_yaml)
 
 
 class YAMLFile(object):
     """Encodes/decodes a dictionary to/from a YAML file"""
     METADATA_CONFIG = 'ssm-diff:config'
     METADATA_PATHS = 'ssm-diff:paths'
-    METADATA_ROOT = 'ssm:root'
-    METADATA_NO_SECURE = 'ssm:no-secure'
+    METADATA_ROOT = 'ssm-diff:root'
+    METADATA_NO_SECURE = 'ssm-diff:no-secure'
+    METADATA_NO_DECRYPT = 'ssm-diff:no-decrypt'
 
-    def __init__(self, filename, paths=('/',), root_path='/', no_secure=False):
+    def __init__(self, filename, paths=('/',), root_path='/', no_secure=False, no_decrypt=False):
         self.filename = '{}.yml'.format(filename)
         self.root_path = root_path
         self.paths = paths
         self.validate_paths()
         self.no_secure = no_secure
+        self.no_decrypt = no_decrypt
 
     def validate_paths(self):
         length = len(self.root_path)
         for path in self.paths:
             if path[:length] != self.root_path:
                 raise ValueError('Root path {} does not contain path {}'.format(self.root_path, path))
+
+    def exists(self):
+        try:
+            open(self.filename, 'rb')
+        except FileNotFoundError:
+            return False
+        return True
 
     def get(self):
         try:
@@ -96,11 +133,6 @@ class YAMLFile(object):
                 else:
                     return local
             return output
-        except IOError as e:
-            print(e, file=sys.stderr)
-            if e.errno == 2:
-                print("Please, run init before doing plan!")
-            sys.exit(1)
         except TypeError as e:
             if 'object is not iterable' in e.args[0]:
                 return dict()
@@ -120,6 +152,13 @@ class YAMLFile(object):
             raise ValueError("YAML file generated with no_secure={} but current class set to no_secure={}".format(
                 config_no_secure, self.no_secure,
             ))
+        # only apply no_decrypt if we actually download secure
+        if not self.no_secure:
+            config_no_decrypt = config.get(self.METADATA_NO_DECRYPT, False)
+            if config_no_decrypt != self.no_decrypt:
+                raise ValueError("YAML file generated with no_decrypt={} but current class set to no_decrypt={}".format(
+                    config_no_decrypt, self.no_decrypt,
+                ))
         # strict requirement that root_path is equal
         config_root = config.get(self.METADATA_ROOT, '/')
         if config_root != self.root_path:
@@ -167,8 +206,9 @@ class YAMLFile(object):
 class ParameterStore(object):
     """Encodes/decodes a dict to/from the SSM Parameter Store"""
     invalid_characters = r'[^a-zA-Z0-9\-_\./]'
+    KMS_KEY = 'aws:kms:alias'
 
-    def __init__(self, profile, diff_class, paths=('/',), no_secure=False):
+    def __init__(self, profile, diff_class, paths=('/',), no_secure=False, no_decrypt=False):
         self.logger = logging.getLogger(self.__class__.__name__)
         if profile:
             boto3.setup_default_session(profile_name=profile)
@@ -184,6 +224,7 @@ class ParameterStore(object):
                     'String', 'StringList',
                 ]
             })
+        self.no_decrypt = no_decrypt
 
     def clone(self):
         p = self.ssm.get_paginator('get_parameters_by_path')
@@ -193,22 +234,30 @@ class ParameterStore(object):
                 for page in p.paginate(
                         Path=path,
                         Recursive=True,
-                        WithDecryption=True,
+                        WithDecryption=not self.no_decrypt,
                         ParameterFilters=self.parameter_filters,
                 ):
                     for param in page['Parameters']:
                         add(obj=output,
                             path=param['Name'],
-                            value=self._read_param(param['Value'], param['Type']))
+                            value=self._read_param(param['Value'], param['Type'], name=param['Name']))
             except (ClientError, NoCredentialsError) as e:
                 print("Failed to fetch parameters from SSM!", e, file=sys.stderr)
 
         return output
 
     # noinspection PyMethodMayBeStatic
-    def _read_param(self, value, ssm_type='String'):
+    def _read_param(self, value, ssm_type='String', name=None):
         if ssm_type == 'SecureString':
-            value = SecureTag(value)
+            description = self.ssm.describe_parameters(
+                Filters=[{
+                    'Key': 'Name',
+                    'Values': [name]
+                }]
+            )
+            value = Secret(value, {
+                self.KMS_KEY: description['Parameters'][0]['KeyId'],
+            }, encrypted=self.no_decrypt)
         elif ssm_type == 'StringList':
             value = value.split(',')
         return value
@@ -238,7 +287,7 @@ class ParameterStore(object):
                         list_errors.append("StringList is comma separated so items may not contain commas: {}".format(item))
                 if list_errors:
                     errors[path+sep+k] = list_errors
-            elif isinstance(v, (str, SecureTag)):
+            elif isinstance(v, (str, SecureTag, Secret)):
                 continue
             elif isinstance(v, (int, float, type(None))):
                 state[k] = str(v)
@@ -254,41 +303,43 @@ class ParameterStore(object):
         plan = self.diff_class(self.clone(), working).plan
         return plan
 
-    def prepare_value(self, value):
+    def prepare_param(self, name, value):
+        kwargs = {
+            'Name': name,
+        }
         if isinstance(value, list):
-            ssm_type = 'StringList'
-            value = ','.join(value)
+            kwargs['Type'] = 'StringList'
+            kwargs['Value'] = ','.join(value)
+        elif isinstance(value, Secret):
+            kwargs['Type'] = 'SecureString'
+            kwargs['Value'] = value.secret
+            kwargs['KeyId'] = value.metadata.get(self.KMS_KEY, None)
         elif isinstance(value, SecureTag):
-            ssm_type = 'SecureString'
+            kwargs['Type'] = 'SecureString'
+            kwargs['Value'] = value.secure
         else:
-            value = repr(value)
-            ssm_type = 'String'
-        return ssm_type, value
+            kwargs['Type'] = 'String'
+            kwargs['Value'] = value
+        return kwargs
 
     def push(self, local):
         plan = self.dry_run(local)
 
         # plan
         for k, v in plan['add'].items():
-            self.logger.info('add: {}'.format(k))
             # { key: new_value }
-            ssm_type, v = self.prepare_value(v)
-            self.ssm.put_parameter(
-                Name=k,
-                Value=v,
-                Type=ssm_type)
+            self.logger.info('add: {}'.format(k))
+            kwargs = self.prepare_param(k, v)
+            self.ssm.put_parameter(**kwargs)
 
         for k, delta in plan['change']:
-            self.logger.info('change: {}'.format(k))
             # { key: {'old': value, 'new': value} }
-            ssm_type, v = self.prepare_value(delta['new'])
-            self.ssm.put_parameter(
-                Name=k,
-                Value=v,
-                Overwrite=True,
-                Type=ssm_type)
+            self.logger.info('change: {}'.format(k))
+            kwargs = self.prepare_param(k, delta['new'])
+            kwargs['Overwrite'] = True
+            self.ssm.put_parameter(**kwargs)
 
         for k in plan['delete']:
-            self.logger.info('delete: {}'.format(k))
             # { key: old_value }
+            self.logger.info('delete: {}'.format(k))
             self.ssm.delete_parameter(Name=k)
