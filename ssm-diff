@@ -92,10 +92,10 @@ if __name__ == "__main__":
     args.yaml_root = os.environ.get('SSM_YAML_ROOT', '/')
     args.paths = os.environ.get('SSM_PATHS', None)
     if args.paths is not None:
-        args.paths = args.paths.split(';:')
+        args.paths = args.paths.replace(';', ':').split(':')
     else:
         # this defaults to '/'
-        args.paths = args.yaml_root
+        args.paths = [args.yaml_root]
 
     # root filename
     if args.filename is not None:
