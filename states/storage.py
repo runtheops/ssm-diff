@@ -126,12 +126,15 @@ class YAMLFile(object):
             with open(self.filename, 'rb') as f:
                 local = yaml.safe_load(f.read())
             self.validate_config(local)
+            # nest the local at its original location
             local = self.nest_root(local)
+            # extract only the relevant paths
             for path in self.paths:
-                if path.strip('/'):
-                    output = merge(output, filter(local, path))
-                else:
+                # if any path is the root_path, return everything
+                if path.strip('/') == self.root_path.strip('/'):
                     return local
+                else:
+                    output = merge(output, filter(local, path))
             return output
         except TypeError as e:
             if 'object is not iterable' in e.args[0]:
