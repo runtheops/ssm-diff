@@ -35,6 +35,7 @@ def filter(state, path):
 def merge(a, b):
     if not isinstance(b, dict):
         return b
+    # TODO: we deepcopy `a` at every level which is overkill
     result = deepcopy(a)
     for k in b:
         if k in result and isinstance(result[k], dict):
