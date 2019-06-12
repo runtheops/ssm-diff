@@ -3,6 +3,7 @@ from __future__ import print_function
 
 import argparse
 import logging
+import traceback
 import os
 import sys
 
@@ -53,6 +54,7 @@ def push(args):
         remote.push(local.get())
     except Exception as e:
         print("Failed to apply changes to remote:", e)
+        traceback.print_exc(10)
     print("Done.")
 
 

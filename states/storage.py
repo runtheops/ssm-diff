@@ -328,7 +328,6 @@ class ParameterStore(object):
     def push(self, local):
         plan = self.dry_run(local)
 
-        # plan
         for k, v in plan['add'].items():
             # { key: new_value }
             self.logger.info('add: {}'.format(k))
