@@ -335,14 +335,14 @@ class ParameterStore(object):
             kwargs = self.prepare_param(k, v)
             self.ssm.put_parameter(**kwargs)
 
-        for k, delta in plan['change']:
+        for k, delta in plan['change'].items():
             # { key: {'old': value, 'new': value} }
             self.logger.info('change: {}'.format(k))
             kwargs = self.prepare_param(k, delta['new'])
             kwargs['Overwrite'] = True
             self.ssm.put_parameter(**kwargs)
 
-        for k in plan['delete']:
+        for k in plan['delete'].items():
             # { key: old_value }
             self.logger.info('delete: {}'.format(k))
             self.ssm.delete_parameter(Name=k)
