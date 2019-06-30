@@ -307,6 +307,9 @@ class ParameterStore(object):
         return plan
 
     def prepare_param(self, name, value):
+        # semantically, delete is probably better but this should have similar consequences without creating exceptions
+        if value is None:
+            value = ''
         kwargs = {
             'Name': name,
         }
