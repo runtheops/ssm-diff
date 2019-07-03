@@ -1,6 +1,9 @@
+import json
 import random
 import string
 from unittest import TestCase, mock
+
+import yaml
 
 from . import engine, storage
 
@@ -544,4 +547,19 @@ class YAMLFileRoot(TestCase):
             },
             # appears to replicate a default, but included in the current code
             default_flow_style=False
+        )
+
+
+class JSONBranch(TestCase):
+    def test_eq(self):
+        test_struture = {'test': ['imem1', 'item2']}
+        test_node = yaml.safe_dump(test_struture)
+        obj = storage.JSONBranch.from_yaml(yaml, test_node)
+        self.assertEqual(
+            obj.value,
+            test_struture,
+        )
+        self.assertEqual(
+            obj,
+            json.dumps(test_struture),
         )

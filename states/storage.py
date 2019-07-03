@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import json
 import logging
 import re
 import sys
@@ -84,11 +85,41 @@ class Secret(yaml.YAMLObject):
         return False
 
 
-yaml.SafeLoader.add_constructor('!secure', SecureTag.from_yaml)
+class JSONBranch(yaml.YAMLObject):
+    yaml_tag = u'!JSON'
+
+    def __init__(self, value):
+        self.value = value
+
+    def __eq__(self, other):
+        return repr(self) == (repr(other) if isinstance(other, JSONBranch) else other)
+
+    def __hash__(self):
+        return hash(self.value)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __repr__(self):
+        return json.dumps(self.value)
+
+    @classmethod
+    def from_yaml(cls, loader, node):
+        return JSONBranch(loader.load(node))
+
+    @classmethod
+    def to_yaml(cls, dumper, data):
+        return data.value
+
+
+yaml.SafeLoader.add_constructor(SecureTag.yaml_tag, SecureTag.from_yaml)
+# backwards compatibility
 yaml.SafeLoader.add_constructor('!SecureString', SecureTag.from_yaml)
 # yaml.SafeDumper.add_multi_representer(SecureTag, SecureTag.to_yaml)
-yaml.SafeLoader.add_constructor('!Secret', Secret.from_yaml)
+yaml.SafeLoader.add_constructor(Secret.yaml_tag, Secret.from_yaml)
 yaml.SafeDumper.add_multi_representer(Secret, Secret.to_yaml)
+yaml.SafeLoader.add_constructor(JSONBranch.yaml_tag, JSONBranch.from_yaml)
+yaml.SafeDumper.add_multi_representer(JSONBranch, JSONBranch.to_yaml)
 
 
 class YAMLFile(object):
@@ -323,6 +354,9 @@ class ParameterStore(object):
         elif isinstance(value, SecureTag):
             kwargs['Type'] = 'SecureString'
             kwargs['Value'] = value.secure
+        elif isinstance(value, JSONBranch):
+            kwargs['Type'] = 'String'
+            kwargs['Value'] = repr(value)
         else:
             kwargs['Type'] = 'String'
             kwargs['Value'] = value
