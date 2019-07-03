@@ -105,7 +105,7 @@ class JSONBranch(yaml.YAMLObject):
 
     @classmethod
     def from_yaml(cls, loader, node):
-        return JSONBranch(loader.load(node))
+        return JSONBranch(yaml.load(node))
 
     @classmethod
     def to_yaml(cls, dumper, data):
