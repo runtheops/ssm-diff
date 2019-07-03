@@ -105,7 +105,11 @@ class JSONBranch(yaml.YAMLObject):
 
     @classmethod
     def from_yaml(cls, loader, node):
-        return JSONBranch(loader.construct_object(node))
+        assert isinstance(loader, yaml.SafeLoader)
+        # ignore the top-level node
+        node.tag = ''
+        value = loader.construct_mapping(node)
+        return JSONBranch(value)
 
     @classmethod
     def to_yaml(cls, dumper, data):

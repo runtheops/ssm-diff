@@ -551,15 +551,18 @@ class YAMLFileRoot(TestCase):
 
 
 class JSONBranch(TestCase):
-    def test_eq(self):
-        test_struture = {'test': ['imem1', 'item2']}
-        test_node = yaml.safe_dump(test_struture)
-        obj = storage.JSONBranch.from_yaml(yaml, test_node)
-        self.assertEqual(
-            obj.value,
-            test_struture,
+
+    def test_eq_mapping(self):
+        obj = yaml.safe_load('root: !JSON\n  child1: value1\n  child2: value2')
+        self.assertIn(
+            'root',
+            obj,
+        )
+        self.assertIsInstance(
+            obj['root'],
+            storage.JSONBranch,
         )
         self.assertEqual(
-            obj,
-            json.dumps(test_struture),
+            repr(obj['root']),
+            '{"child1": "value1", "child2": "value2"}',
         )
