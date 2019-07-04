@@ -327,6 +327,8 @@ class ParameterStore(object):
                     errors[path+sep+k] = list_errors
             elif isinstance(v, (str, SecureTag, Secret)):
                 continue
+            elif isinstance(v, JSONBranch):
+                continue
             elif isinstance(v, (int, float, type(None))):
                 state[k] = str(v)
             else:
