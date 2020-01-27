@@ -28,6 +28,19 @@ def pull(args):
 
 def apply(args):
     r, _, diff = plan(args)
+    
+    # validation at least 1 change is made before proceeding with the apply action
+    if len(diff.added()) == 0 and len(diff.changed()) == 0 and len(diff.removed()) == 0:
+        print('\nNo changes made.')
+        return
+    
+    # Printing summary of changes
+    print('\nPlan:  {} to add, {} to change, {} to delete.'.format(len(diff.added()),len(diff.changed()),len(diff.removed())))
+    
+    # Asking the user for final approval
+    user_input = input('Confirm? [Y/N] ')
+    if user_input.lower() not in ('y','yes'):
+        return
 
     print("\nApplying changes...")
     try:
