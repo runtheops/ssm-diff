@@ -90,10 +90,11 @@ class LocalState(object):
 
 
 class RemoteState(object):
-    def __init__(self, profile):
+    def __init__(self, profile, overwrite):
         if profile:
             boto3.setup_default_session(profile_name=profile)
         self.ssm = boto3.client('ssm')
+        self.overwrite = overwrite
 
     def get(self, paths=['/'], flat=True):
         p = self.ssm.get_paginator('get_parameters_by_path')
@@ -132,11 +133,15 @@ class RemoteState(object):
         for k in diff.removed():
             self.ssm.delete_parameter(Name=k)
 
+        if not self.overwrite:
+            print("Skipping overwrite of vars")
+            return
+
         for k in diff.changed():
             ssm_type = 'SecureString' if isinstance(diff.target[k], SecureTag) else 'String'
 
             self.ssm.put_parameter(
                 Name=k,
                 Value=repr(diff.target[k]) if type(diff.target[k]) == SecureTag else str(diff.target[k]),
-                Overwrite=True,
+                Overwrite=self.overwrite,
                 Type=ssm_type)
