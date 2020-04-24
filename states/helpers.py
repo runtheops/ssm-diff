@@ -56,6 +56,10 @@ def add(obj, path, value):
             obj[part] = value
         else:
             obj = obj.setdefault(part, {})
+            # For some reason the line above returns NONE instead of {} sometimes.
+            # The line below is a hack to fix that
+            if isinstance(obj, str):
+                obj = {}
 
 
 def search(state, path):
