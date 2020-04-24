@@ -7,13 +7,13 @@ import os
 
 
 def init(args):
-    r, l = RemoteState(args.profile), LocalState(args.filename)
+    r, l = RemoteState(args.profile, args.overwrite), LocalState(args.filename)
     l.save(r.get(flat=False, paths=args.path))
 
 
 def pull(args):
     dictfilter = lambda x, y: dict([ (i,x[i]) for i in x if i in set(y) ])
-    r, l = RemoteState(args.profile), LocalState(args.filename)
+    r, l = RemoteState(args.profile, args.overwrite), LocalState(args.filename)
     diff = helpers.FlatDictDiffer(r.get(paths=args.path), l.get(paths=args.path))
     if args.force:
         ref_set = diff.changed().union(diff.removed()).union(diff.unchanged())
@@ -38,7 +38,7 @@ def apply(args):
 
 
 def plan(args):
-    r, l = RemoteState(args.profile), LocalState(args.filename)
+    r, l = RemoteState(args.profile, args.overwrite), LocalState(args.filename)
     diff = helpers.FlatDictDiffer(r.get(paths=args.path), l.get(paths=args.path))
 
     if diff.differ:
@@ -54,6 +54,7 @@ if __name__ == "__main__":
     parser.add_argument('-f', help='local state yml file', action='store', dest='filename', default='parameters.yml')
     parser.add_argument('--path', '-p', action='append', help='filter SSM path')
     parser.add_argument('--profile', help='AWS profile name', action='store', dest='profile')
+    parser.add_argument('--overwrite', help='Overwrite on change', action='store', type=lambda x: (str(x).lower() == 'true'), dest='overwrite', default=True)
     subparsers = parser.add_subparsers(dest='func', help='commands')
     subparsers.required = True
 
