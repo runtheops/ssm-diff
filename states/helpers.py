@@ -3,6 +3,9 @@ from copy import deepcopy
 import collections
 
 
+INTERNAL_KEY = '@value'  # used to represent internal key in param hierarchy
+
+
 class FlatDictDiffer(object):
     def __init__(self, ref, target):
         self.ref, self.target = ref, target
@@ -40,7 +43,10 @@ class FlatDictDiffer(object):
 def flatten(d, pkey='', sep='/'):
     items = []
     for k in d:
-        new = pkey + sep + k if pkey else k
+        if k == INTERNAL_KEY:
+            new = pkey if pkey else ""
+        else:
+            new = pkey + sep + k if pkey else k
         if isinstance(d[k], collections.MutableMapping):
             items.extend(flatten(d[k], new, sep=sep).items())
         else:
@@ -55,7 +61,11 @@ def add(obj, path, value):
         if index == last:
             obj[part] = value
         else:
-            obj = obj.setdefault(part, {})
+            if part in obj and not isinstance(obj[part], collections.MutableMapping):
+                obj[part] = {INTERNAL_KEY: obj[part]}
+                obj = obj[part]
+            else:
+                obj = obj.setdefault(part, {})
 
 
 def search(state, path):
