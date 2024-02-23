@@ -1,6 +1,6 @@
 from termcolor import colored
 from copy import deepcopy
-import collections
+import collections.abc
 
 
 class FlatDictDiffer(object):
@@ -41,7 +41,7 @@ def flatten(d, pkey='', sep='/'):
     items = []
     for k in d:
         new = pkey + sep + k if pkey else k
-        if isinstance(d[k], collections.MutableMapping):
+        if isinstance(d[k], collections.abc.MutableMapping):
             items.extend(flatten(d[k], new, sep=sep).items())
         else:
             items.append((sep + new, d[k]))
