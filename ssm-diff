@@ -5,6 +5,19 @@ import states.helpers as helpers
 import argparse
 import os
 
+def backup(args):
+    # set filename to <profile-name>-<timestamp>.yml if not specified
+    if args.filename == 'parameters.yml':
+        args.filename = helpers.timestamp() + '.yml'
+
+    # save remote state to local file
+    r, l = RemoteState(args.profile), LocalState(args.filename)
+    l.save(r.get(flat=False, paths=args.path))
+
+    # upload local file to s3 bucket
+    s3 = S3State(args.bucket, args.key, args.profile, args.filename)
+    s3.save()
+
 
 def init(args):
     r, l = RemoteState(args.profile), LocalState(args.filename)
@@ -56,6 +69,11 @@ if __name__ == "__main__":
     parser.add_argument('--profile', help='AWS profile name', action='store', dest='profile')
     subparsers = parser.add_subparsers(dest='func', help='commands')
     subparsers.required = True
+
+    parser_backup = subparsers.add_parser('backup', help='backup remote state to s3 bucket')
+    parser_backup.set_defaults(func=backup)
+    parser_backup.add_argument('--bucket', help='s3 bucket name', action='store', dest='bucket')
+    parser_backup.add_argument('--key', help='s3 key name', action='store', dest='key')
 
     parser_plan = subparsers.add_parser('plan', help='display changes between local and remote states')
     parser_plan.set_defaults(func=plan)

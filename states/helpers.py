@@ -91,3 +91,8 @@ def merge(a, b):
         else:
             result[k] = deepcopy(b[k])
     return result
+
+
+def timestamp():
+    from datetime import datetime
+    return datetime.now().strftime('%Y-%m-%d-%H:%M:%S')

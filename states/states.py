@@ -89,6 +89,33 @@ class LocalState(object):
             sys.exit(1)
 
 
+class S3State(object):
+    def __init__(self, bucket, key, profile, filename):
+        if profile:
+            boto3.setup_default_session(profile_name=profile)
+        self.s3 = boto3.client('s3')
+        self.bucket = bucket
+        self.key = key
+        self.filename = filename
+
+    def save(self):
+        try:
+            # read the current state from local file
+            with open(self.filename, 'rb') as f:
+                state = yaml.safe_load(f.read())
+            self.s3.put_object(
+                Bucket=self.bucket,
+                Key=self.key + '/' + self.filename,
+                Body=yaml.safe_dump(state),
+                ServerSideEncryption='aws:kms',
+                SSEKMSKeyId=os.environ['KMS_KEY_ID']
+            )
+        except ClientError as e:
+            print("Failed to save parameters to S3!", e, file=sys.stderr)
+            sys.exit(1)
+        print("State saved to S3 bucket: {}/{}".format(self.bucket, self.key))
+
+
 class RemoteState(object):
     def __init__(self, profile):
         if profile:
